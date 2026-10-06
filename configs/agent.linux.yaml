@@ -1,0 +1,28 @@
+# Run Agent and backend on the same Linux machine for this local example.
+agent:
+  name: linux-demo-agent
+  state_dir: ../state/linux-agent
+controller:
+  address: 127.0.0.1:9443
+  connect_timeout: 5s
+  send_timeout: 10s
+  reconnect_initial: 1s
+  reconnect_max: 30s
+security:
+  mode: development
+local:
+  enabled: true
+telemetry:
+  fast_interval: 3s
+  medium_interval: 30s
+  inventory_interval: 5m
+  topology_interval: 5m
+  heartbeat_interval: 10s
+  collect_timeout: 2s
+queue:
+  max_messages: 256
+  max_bytes: 8388608
+  max_message_bytes: 1048576
+devices: []
+commands:
+  enabled: false

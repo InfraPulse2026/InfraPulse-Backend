@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-infrapulse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-infrapulse_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-infrapulse}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  backend:
+    build: .
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-infrapulse}:${POSTGRES_PASSWORD:-infrapulse_dev}@postgres:5432/${POSTGRES_DB:-infrapulse}?sslmode=disable
+      HTTP_ADDRESS: 0.0.0.0:8080
+      GRPC_ADDRESS: 0.0.0.0:9443
+      AGENT_TIMEOUT: 90s
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:8080"
+      - "127.0.0.1:${GRPC_PORT:-9443}:9443"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 15s
+volumes:
+  postgres_data:
