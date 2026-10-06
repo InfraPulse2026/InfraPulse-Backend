@@ -1,0 +1,21 @@
+# Use with the unmodified InfraPulse Agent Simulator.
+agent:
+  name: backend-demo-simulator
+  state_dir: ../state/simulator
+controller:
+  address: 127.0.0.1:9443
+  connect_timeout: 5s
+  send_timeout: 10s
+  reconnect_initial: 1s
+  reconnect_max: 30s
+security:
+  mode: development
+local:
+  enabled: false
+queue:
+  max_messages: 256
+  max_bytes: 8388608
+  max_message_bytes: 1048576
+devices: []
+commands:
+  enabled: false

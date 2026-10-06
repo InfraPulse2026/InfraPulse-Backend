@@ -1,0 +1,31 @@
+name: Backend checks
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: infrapulse
+          POSTGRES_PASSWORD: infrapulse_test
+          POSTGRES_DB: infrapulse_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U infrapulse -d infrapulse_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://infrapulse:infrapulse_test@localhost:5432/infrapulse_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - name: Formatting
+        run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: go build ./cmd/server
+      - run: docker compose config --quiet
+      - run: docker compose build backend

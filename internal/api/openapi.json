@@ -1,0 +1,1186 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "InfraPulse Backend MVP",
+    "version": "0.2.0",
+    "description": "Agent protocol v1; device observations are read-only. Expected monitoring intervals can be configured from 3 seconds to 24 hours; automatic delivery to Agent is not implemented. Local development API."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8080"
+    }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "summary": "Process is alive",
+        "responses": {
+          "200": {
+            "description": "Alive",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "ready",
+        "summary": "PostgreSQL is available",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agents": {
+      "get": {
+        "operationId": "listAgents",
+        "summary": "List registered agents (maximum 1000)",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "operationId": "listDevices",
+        "summary": "List device cards",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            },
+            "description": "Maximum items"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000,
+              "default": 0
+            },
+            "description": "Pagination offset"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevicePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}": {
+      "get": {
+        "operationId": "getDevice",
+        "summary": "Get one device card",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Device"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}/inventory": {
+      "get": {
+        "operationId": "getInventory",
+        "summary": "Full last inventory in protobuf JSON",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Protobuf Device JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Protobuf JSON: snake_case, enum names; int64/uint64 values are strings; omitted fields mean absent/default. Full schema: api/proto/infrapulse/v1/agent.proto."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}/telemetry": {
+      "get": {
+        "operationId": "getTelemetry",
+        "summary": "Latest telemetry by observed_at",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LatestTelemetry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "summary": "Alias of /telemetry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LatestTelemetry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}/metrics/history": {
+      "get": {
+        "operationId": "getHistory",
+        "summary": "Telemetry newest first; empty array when no samples",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            },
+            "description": "Maximum items"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{id}/monitoring": {
+      "get": {
+        "responses": {
+          "200": {
+            "description": "Expected monitoring intervals; changes are not delivered to Agent automatically",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getMonitoring",
+        "summary": "Get expected collection schedule and manual Agent YAML fragments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          }
+        ]
+      },
+      "put": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MonitoringPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "operationId": "setMonitoring",
+        "summary": "Save expected collection schedule (manual Agent configuration required)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Device ID, URL-encoded; e.g. local:UUID or simulated:device-001"
+          },
+          {
+            "name": "agent_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by collector. Required for detail requests when the same device ID belongs to multiple agents."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Expected monitoring intervals; changes are not delivered to Agent automatically",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonitoringSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device ID is ambiguous; specify agent_id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device or latest telemetry not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "Agent": {
+        "type": "object",
+        "required": [
+          "agent_id",
+          "session_id",
+          "name",
+          "version",
+          "protocol_version",
+          "connected",
+          "last_seen",
+          "heartbeat"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "protocol_version": {
+            "type": "integer"
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "heartbeat": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Protobuf JSON: snake_case, enum names; int64/uint64 values are strings; omitted fields mean absent/default. Full schema: api/proto/infrapulse/v1/agent.proto.",
+            "nullable": true
+          }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "required": [
+          "agent_id",
+          "device_id",
+          "name",
+          "hostname",
+          "vendor",
+          "model",
+          "type",
+          "management_address",
+          "source",
+          "online",
+          "agent_connected",
+          "last_seen",
+          "received_at",
+          "inventory",
+          "monitoring",
+          "telemetry_freshness"
+        ],
+        "properties": {
+          "agent_id": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "vendor": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "description": "Protobuf DeviceType enum, e.g. DEVICE_TYPE_SWITCH"
+          },
+          "management_address": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Last device observation; does not imply a current controller connection"
+          },
+          "agent_connected": {
+            "type": "boolean",
+            "description": "Stream active and last receipt newer than AGENT_TIMEOUT"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "inventory": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Protobuf JSON: snake_case, enum names; int64/uint64 values are strings; omitted fields mean absent/default. Full schema: api/proto/infrapulse/v1/agent.proto."
+          },
+          "monitoring": {
+            "$ref": "#/components/schemas/MonitoringSettings"
+          },
+          "telemetry_freshness": {
+            "$ref": "#/components/schemas/Freshness"
+          }
+        }
+      },
+      "Telemetry": {
+        "type": "object",
+        "required": [
+          "id",
+          "agent_id",
+          "device_id",
+          "observed_at",
+          "collected_at",
+          "received_at",
+          "source",
+          "cpu_usage_percent",
+          "memory_total_bytes",
+          "memory_used_bytes",
+          "sample"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "agent_id": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "collected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string"
+          },
+          "cpu_usage_percent": {
+            "type": "number",
+            "nullable": true
+          },
+          "memory_total_bytes": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[0-9]+$",
+            "description": "Unsigned 64-bit integer encoded as decimal string"
+          },
+          "memory_used_bytes": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[0-9]+$"
+          },
+          "sample": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Protobuf JSON: snake_case, enum names; int64/uint64 values are strings; omitted fields mean absent/default. Full schema: api/proto/infrapulse/v1/agent.proto."
+          }
+        }
+      },
+      "DevicePage": {
+        "type": "object",
+        "required": [
+          "items",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        }
+      },
+      "AgentList": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Agent"
+            }
+          }
+        }
+      },
+      "TelemetryPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "limit"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Telemetry"
+            }
+          },
+          "limit": {
+            "type": "integer"
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "MonitoringPolicy": {
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "telemetry_interval_seconds",
+          "inventory_interval_seconds",
+          "topology_interval_seconds"
+        ],
+        "properties": {
+          "telemetry_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          },
+          "topology_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          },
+          "inventory_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          }
+        }
+      },
+      "MonitoringSettings": {
+        "type": "object",
+        "required": [
+          "origin",
+          "recommended_topology_ttl_seconds",
+          "delivery_mode",
+          "remote_polling_yaml",
+          "local_telemetry_yaml",
+          "telemetry_interval_seconds",
+          "inventory_interval_seconds",
+          "application_status",
+          "topology_interval_seconds"
+        ],
+        "properties": {
+          "origin": {
+            "enum": [
+              "backend_default",
+              "device_override"
+            ],
+            "type": "string"
+          },
+          "recommended_topology_ttl_seconds": {
+            "type": "integer"
+          },
+          "delivery_mode": {
+            "enum": [
+              "manual_agent_yaml"
+            ],
+            "type": "string"
+          },
+          "remote_polling_yaml": {
+            "type": "string"
+          },
+          "local_telemetry_yaml": {
+            "type": "string"
+          },
+          "telemetry_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          },
+          "inventory_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          },
+          "application_status": {
+            "enum": [
+              "unverified"
+            ],
+            "type": "string"
+          },
+          "topology_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          }
+        }
+      },
+      "Freshness": {
+        "type": "object",
+        "required": [
+          "observed_at",
+          "expected_interval_seconds",
+          "status",
+          "expected_next_at",
+          "stale_after_seconds",
+          "age_seconds",
+          "received_at"
+        ],
+        "properties": {
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "expected_interval_seconds": {
+            "type": "integer",
+            "maximum": 86400,
+            "minimum": 3
+          },
+          "status": {
+            "enum": [
+              "fresh",
+              "stale",
+              "no_data",
+              "clock_skew"
+            ],
+            "type": "string"
+          },
+          "expected_next_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "stale_after_seconds": {
+            "type": "integer"
+          },
+          "age_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "LatestTelemetry": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Telemetry"
+          },
+          {
+            "type": "object",
+            "required": [
+              "freshness",
+              "monitoring"
+            ],
+            "properties": {
+              "freshness": {
+                "$ref": "#/components/schemas/Freshness"
+              },
+              "monitoring": {
+                "$ref": "#/components/schemas/MonitoringSettings"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
