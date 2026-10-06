@@ -19,6 +19,8 @@ import (
 )
 
 type Repository interface {
+	// Ingest returns nil only after inbox and domain persistence have committed.
+	// A legitimate replay must also return nil without repeating domain effects.
 	Ingest(context.Context, *pb.AgentEnvelope) error
 	Disconnect(context.Context, string, string) error
 }
@@ -36,7 +38,21 @@ func New(repo Repository, log *slog.Logger) *Controller {
 	return &Controller{repo: repo, log: log, active: make(map[string]bool), slots: make(chan struct{}, 128)}
 }
 
+// All controller messages share this serialized send path. gRPC permits one
+// sender concurrently with one receiver, but not concurrent Send calls.
+type streamSender struct {
+	mu     sync.Mutex
+	stream grpc.BidiStreamingServer[pb.AgentEnvelope, pb.ControllerEnvelope]
+}
+
+func (s *streamSender) send(e *pb.ControllerEnvelope) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.stream.Send(e)
+}
+
 func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, pb.ControllerEnvelope]) error {
+	sender := &streamSender{stream: stream}
 	select {
 	case c.slots <- struct{}{}:
 		defer func() { <-c.slots }()
@@ -78,10 +94,11 @@ func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, p
 		return err
 	}
 	registered = true
-	if err = stream.Send(&pb.ControllerEnvelope{Payload: &pb.ControllerEnvelope_HelloAck{HelloAck: &pb.HelloAck{Accepted: true, ProtocolVersion: 1}}}); err != nil {
+	applicationACK := h.ApplicationAck
+	if err = sender.send(&pb.ControllerEnvelope{Payload: &pb.ControllerEnvelope_HelloAck{HelloAck: &pb.HelloAck{Accepted: true, ProtocolVersion: 1, ApplicationAck: applicationACK}}}); err != nil {
 		return err
 	}
-	c.log.Info("agent connected", "agent_id", e.AgentId, "session_id", e.SessionId, "name", h.Name)
+	c.log.Info("agent connected", "agent_id", e.AgentId, "session_id", e.SessionId, "name", h.Name, "application_ack", applicationACK)
 	defer c.log.Info("agent disconnected", "agent_id", e.AgentId)
 	sequence := e.Sequence
 	for {
@@ -102,8 +119,17 @@ func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, p
 			return err
 		}
 		sequence = next.Sequence
+		// Ingest has committed, including when this is a legitimate replay.
+		// Send failure leaves the durable inbox intact for the next attempt.
+		if applicationACK {
+			if err = sender.send(&pb.ControllerEnvelope{Payload: &pb.ControllerEnvelope_MessageAck{MessageAck: &pb.MessageACK{MessageId: next.MessageId}}}); err != nil {
+				c.log.Debug("message ACK send failed after commit", "agent_id", next.AgentId, "message_id", next.MessageId, "error", err)
+				return err
+			}
+			c.log.Debug("message ACK sent", "agent_id", next.AgentId, "message_id", next.MessageId, "kind", storage.Kind(next))
+		}
 		if next.GetHeartbeat() != nil {
-			c.log.Info("heartbeat received", "agent_id", e.AgentId, "health", next.GetHeartbeat().Health)
+			c.log.Debug("heartbeat received", "agent_id", e.AgentId, "health", next.GetHeartbeat().Health)
 		}
 	}
 }
@@ -113,7 +139,7 @@ func (c *Controller) persist(ctx context.Context, e *pb.AgentEnvelope) error {
 		if errors.Is(err, storage.ErrMessageConflict) {
 			return status.Error(codes.InvalidArgument, "message ID reused with different contents")
 		}
-		c.log.Error("cannot persist agent message", "agent_id", e.AgentId, "kind", storage.Kind(e), "error", err)
+		c.log.Error("cannot persist agent message", "agent_id", e.AgentId, "message_id", e.MessageId, "kind", storage.Kind(e), "ack_sent", false, "error", err)
 		return status.Error(codes.Unavailable, "cannot persist message; reconnect and retry")
 	}
 	return nil
@@ -163,6 +189,9 @@ func validate(e *pb.AgentEnvelope) error {
 // Walk all supplied fields so malformed timestamps or NaN values in optional
 // payloads cannot silently enter PostgreSQL or become invalid JSON for frontend.
 func validateFields(m protoreflect.Message) error {
+	if !m.IsValid() || len(m.GetUnknown()) != 0 {
+		return errors.New("payload contains unsupported protobuf fields")
+	}
 	if m.Descriptor().FullName() == "google.protobuf.Timestamp" {
 		ts := m.Interface().(*timestamppb.Timestamp)
 		if err := ts.CheckValid(); err != nil {

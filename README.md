@@ -1,218 +1,198 @@
-# InfraPulse Backend — первый сквозной MVP
+# InfraPulse Backend
 
-Backend принимает сообщения существующего InfraPulse Agent по gRPC, сохраняет
-их в PostgreSQL и отдаёт устройства и метрики через HTTP REST API.
+InfraPulse Backend — серверный Go-компонент NetOps Platform InfraPulse.
+Он принимает данные инфраструктуры от Agent, хранит их в PostgreSQL и
+предоставляет REST API для просмотра устройств, их состояния и истории метрик.
+
+Agent отвечает за сбор данных на хостах и сетевых устройствах. Backend
+объединяет результаты collectors в одном хранилище и предоставляет интерфейс
+для клиентских приложений InfraPulse. Web UI находится вне этого репозитория.
+
+## Возможности
+
+- Регистрация Agent, учёт подключений, история сессий и приём heartbeat.
+- Хранение inventory и последнего наблюдённого состояния устройств.
+- Приём и история telemetry: CPU, RAM, interfaces, counters и rates,
+  переданных Agent.
+- Application ACK после сохранения в PostgreSQL и дедупликация повторной доставки.
+- REST API: устройства, фильтрация по Agent, inventory, последние метрики
+  и история измерений.
+- Оценка свежести telemetry и настройка ожидаемых интервалов мониторинга.
+- TLS/mTLS для gRPC, автоматические миграции БД, health/readiness endpoints.
+
+## Как это работает
 
 ```text
-Linux Agent / SNMP Collector / Simulator
-                 │ AgentService.Connect, protocol v1
-                 ▼
-         Go Controller + REST API
-                 │
-                 ▼
-             PostgreSQL
-                 ▲
-                 │
-       Frontend → HTTP REST API
+Хосты и сетевые устройства
+          │
+          ▼
+InfraPulse Agent / Collector
+          │ исходящее gRPC-соединение
+          ▼
+Backend Controller → PostgreSQL → REST API → клиенты InfraPulse
+          │
+          └── ACK после сохранения → Agent
 ```
 
-Реализованы регистрация **до HelloAck**, heartbeat, история сессий, inventory,
-telemetry, поиск устройств и история измерений. Команды устройствам не отправляются.
-Подробности для frontend: [docs/api.md](docs/api.md).
-Следующие этапы backend с учётом уточнений организаторов:
-[docs/backend-roadmap.md](docs/backend-roadmap.md).
-Машиночитаемый контракт: [internal/api/openapi.json](internal/api/openapi.json),
-также доступен по `GET /openapi.json`.
-Настраиваемая частота сбора и оценка свежести данных:
-[docs/monitoring-intervals.md](docs/monitoring-intervals.md).
+Agent сам устанавливает bidirectional stream `infrapulse.v1.AgentService/Connect`.
+Backend регистрирует Agent и его session, принимает inventory, heartbeat и
+telemetry. Сбор Linux/OpenWrt и опрос SNMP/RouterOS выполняются на стороне Agent.
 
-## 1. Запуск одной командой через Docker
+При согласованном application ACK Backend подтверждает сообщение после COMMIT.
+Durable Agent сохраняет его в outbox до ACK и повторяет отправку после потери
+соединения. Повтор сообщения с тем же ID не создаёт вторую запись telemetry;
+использование того же ID для другого содержимого отклоняется.
 
-На Windows установи Docker Desktop и запусти его. На Linux нужен Docker Engine
-с Compose. Go на компьютере для этого варианта не требуется.
+### Данные в PostgreSQL
 
-Открой терминал **в папке InfraPulse-Backend-main**, где находится этот README:
+| Сущность | Содержимое |
+|---|---|
+| `agents`, `agent_sessions` | Регистрация, heartbeat, состояние подключения и история сессий |
+| `devices` | Inventory и последнее наблюдённое состояние устройства |
+| `telemetry` | Измерения, время наблюдения, CPU/RAM и полный sample в JSONB |
+| `agent_messages` | Принятые сообщения Agent и состояние дедупликации |
+| `monitoring_policies` | Ожидаемые интервалы мониторинга устройств |
 
-```powershell
-Copy-Item .env.example .env
+Устройство идентифицируется парой `(agent_id, device_id)`: одинаковые ID
+у разных collectors не перезаписывают друг друга. Сообщение и его изменения
+устройств/метрик сохраняются в одной транзакции.
+
+## Структура проекта
+
+```text
+cmd/server/           запуск Backend
+internal/controller/  gRPC, регистрация и ACK
+internal/storage/     PostgreSQL, миграции и запросы
+internal/api/         REST API и OpenAPI
+internal/monitoring/  интервалы и оценка свежести данных
+internal/config/      конфигурация из environment variables
+api/proto/, api/gen/  protobuf-контракт и generated Go sources
+configs/              примеры подключения Agent
+scripts/, docs/       инструменты и документация
+```
+
+## Быстрый старт
+
+Для контейнерного запуска нужен Docker с Compose. Из корня Backend:
+
+```sh
+cp .env.example .env
 docker compose up --build -d
 docker compose logs -f backend
 ```
 
-На Linux вместо `Copy-Item` используй `cp .env.example .env`.
-Первый запуск скачивает образы и зависимости. После запуска появится
-`backend ready`. База будет готова до старта backend; миграции применяются самим
-backend автоматически. Файлы SQL находятся в `internal/storage/migrations` и
-включаются в бинарник, поэтому рабочая папка запуска не влияет на миграции.
+В PowerShell вместо `cp` используйте `Copy-Item .env.example .env`.
+Compose запускает Backend и PostgreSQL; миграции применяются автоматически.
+Данные БД сохраняются в volume `postgres_data`.
 
-Открой в браузере:
-
-- `http://127.0.0.1:8080/healthz` — процесс работает;
-- `http://127.0.0.1:8080/readyz` — база доступна;
-- `http://127.0.0.1:8080/api/agents` — зарегистрированные агенты;
-- `http://127.0.0.1:8080/api/devices` — устройства, пока пустой `items: []`.
-
-Для остановки: `docker compose down`. Данные сохраняются в отдельном Docker
-volume. Повторный `up` сохраняет историю. Порты опубликованы только на локальном
-компьютере: HTTP 8080, gRPC 9443, PostgreSQL 5432. Не запускай Mock Controller
-Agent одновременно на том же порту 9443.
-
-## 2. Проверка с готовым Simulator на Windows или Linux
-
-Сначала запусти backend. Нужен Go **1.27 или новее**, как у Agent. Официальная
-загрузка: [go.dev/dl](https://go.dev/dl/). Если Go установлен только что,
-переоткрой терминал и проверь `go version`.
-
-Из **папки Agent** собери существующий Simulator:
-
-```powershell
-go build -o bin/infrapulse-simulator.exe ./cmd/infrapulse-simulator
-```
-
-Для распакованных здесь папок запусти его из той же папки Agent:
-
-```powershell
-./bin/infrapulse-simulator.exe --config ../../InfraPulse-Backend-main/configs/agent.simulator.yaml --scenario all --duration 10s --interval 1s --devices 4 --output controller --start 2026-10-05T16:00:00Z
-```
-
-На Linux собери `-o bin/infrapulse-simulator` и запусти без `.exe`.
-Если у команды Agent и Backend лежат рядом, укажи путь
-`../InfraPulse-Backend/configs/agent.simulator.yaml` вместо `../../...`.
-Для актуальных дат можно задать `--start` текущим временем RFC3339. Без него
-Simulator использует свою фиксированную временную шкалу.
-
-Теперь `GET /api/devices` покажет устройства. Выбери `device_id` из списка;
-например, `simulated:device-001`:
-
-```powershell
-Invoke-RestMethod 'http://127.0.0.1:8080/api/devices/simulated:device-001/telemetry'
-Invoke-RestMethod 'http://127.0.0.1:8080/api/devices/simulated:device-001/metrics/history?limit=20'
-```
-
-В данных будет `source: simulated`. Это демонстрационные измерения. После
-завершения Simulator его `agent_connected` становится `false`, а карточки и
-история остаются в базе.
-
-## 3. Настоящие CPU/RAM/network metrics на Linux
-
-Для локального сбора Agent нужен Linux. В этом примере Agent и backend работают
-на **одной Linux-машине**: Agent на хосте, backend через Compose или `go run`.
-
-Из папки Agent:
+По умолчанию REST доступен на `http://127.0.0.1:8080`, gRPC — на
+`127.0.0.1:9443`, PostgreSQL — на `127.0.0.1:5432`.
 
 ```sh
-go build -o bin/infrapulse-agent ./cmd/infrapulse-agent
-./bin/infrapulse-agent validate-config --config ../../InfraPulse-Backend-main/configs/agent.linux.yaml
-./bin/infrapulse-agent run --config ../../InfraPulse-Backend-main/configs/agent.linux.yaml
+curl http://127.0.0.1:8080/readyz
+curl http://127.0.0.1:8080/api/devices
 ```
 
-Исправь только путь к конфигурации, если папки расположены иначе. Конфигурация
-включает CPU/RAM/interfaces каждые 3 секунды, heartbeat каждые 10 секунд,
-inventory каждые 5 минут. Она не включает удалённые устройства и команды.
-Постоянный `agent_id` хранится в каталоге состояния Agent; при новом запуске
-создаётся новый `session_id`. Не удаляй каталог состояния между запусками,
-если хочешь сохранить идентичность агента.
+До подключения Agent список устройств пуст. Остановка:
+`docker compose down`; volume с данными сохраняется.
 
-Критерий проверки: Agent появляется в `/api/agents`, устройство `local:...` —
-в `/api/devices`, а `/api/devices/{id}/telemetry` показывает новые реальные
-измерения. Получи ID из списка, не придумывай его вручную.
+### Подключение Agent
 
-На Windows можно запустить обычный Agent с `local.enabled: false` и проверить
-регистрацию/heartbeat, но локальных Linux-метрик в этом режиме не будет.
+Для Linux local collector с durable delivery подготовлен
+[agent.linux.durable.yaml](configs/agent.linux.durable.yaml).
+Он использует `queue.mode: durable`, `ack_fallback: reject` и telemetry каждые 3s.
 
-## 4. Разработка backend без контейнера Go
+Если репозитории расположены рядом, из корня `InfraPulseAgent`:
 
-Подними только базу и запусти Go-проект локально:
+```sh
+mkdir -p bin
+go build -o bin/infrapulse-agent ./cmd/infrapulse-agent
+./bin/infrapulse-agent validate-config --config ../InfraPulseBackend/configs/agent.linux.durable.yaml
+./bin/infrapulse-agent run --config ../InfraPulseBackend/configs/agent.linux.durable.yaml
+```
 
-```powershell
+Пример рассчитан на Agent и Backend на одной Linux-машине. Сохраняйте каталог
+состояния Agent между запусками: в нём находятся постоянный Agent ID и outbox.
+Для memory mode есть [agent.linux.yaml](configs/agent.linux.yaml), для Simulator —
+[agent.simulator.yaml](configs/agent.simulator.yaml).
+
+### Запуск из исходников
+
+Нужны Go 1.27 или новее и доступный PostgreSQL. Для локальной БД можно использовать
+Compose:
+
+```sh
 docker compose up -d postgres
 go run ./cmd/server
 ```
 
-При настройках `.env.example` дополнительных переменных не требуется.
-Файл `.env` читает **Docker Compose**; `go run` его автоматически не загружает.
-Если изменил имя базы/пароль/порт, задай `DATABASE_URL` явно:
+При стандартных настройках `.env.example` параметры БД совпадают с defaults
+Backend. При изменении адреса или credentials задайте `DATABASE_URL`.
+Файл `.env` читает Compose; `go run` его автоматически не загружает.
+`protoc` для обычной сборки не требуется.
 
-```powershell
-$env:DATABASE_URL='postgres://infrapulse:infrapulse_dev@127.0.0.1:5432/infrapulse?sslmode=disable'
-go run ./cmd/server
-```
+## Конфигурация
 
-В этой рабочей папке Go также подготовлен отдельно в `../tools/go/bin/go.exe`.
-Его можно вызвать вместо `go`, например `../tools/go/bin/go.exe test ./...`.
-Папка tools не является частью backend и не нужна в репозитории команды.
-
-### Настройки backend
+Backend настраивается через environment variables. В Compose порты и параметры
+PostgreSQL задаются в [.env.example](.env.example).
 
 | Переменная | По умолчанию | Назначение |
 |---|---|---|
-| `DATABASE_URL` | локальная база из `.env.example` | строка подключения PostgreSQL |
-| `HTTP_ADDRESS` | `127.0.0.1:8080` | HTTP API |
-| `GRPC_ADDRESS` | `127.0.0.1:9443` | входящий stream Agent |
-| `AGENT_TIMEOUT` | `90s` | свежесть последнего полученного сообщения |
-| `DEFAULT_TELEMETRY_INTERVAL` | `3s` | ожидаемый период метрик, 3s..24h |
-| `DEFAULT_INVENTORY_INTERVAL` | `5m` | ожидаемый период inventory, 3s..24h |
-| `DEFAULT_TOPOLOGY_INTERVAL` | `5m` | ожидаемый период topology, 3s..24h |
-| `TLS_CERT_FILE` | пусто | сертификат gRPC-сервера |
-| `TLS_KEY_FILE` | пусто | ключ gRPC-сервера |
-| `TLS_CLIENT_CA_FILE` | пусто | CA для проверки сертификатов Agent, включает mTLS |
+| `DATABASE_URL` | Локальная БД с credentials из `.env.example` | Подключение к PostgreSQL |
+| `HTTP_ADDRESS` | `127.0.0.1:8080` | REST listener |
+| `GRPC_ADDRESS` | `127.0.0.1:9443` | gRPC listener |
+| `AGENT_TIMEOUT` | `90s` | Срок актуальности связи с Agent |
+| `DEFAULT_TELEMETRY_INTERVAL` | `3s` | Ожидаемый интервал telemetry |
+| `DEFAULT_INVENTORY_INTERVAL`, `DEFAULT_TOPOLOGY_INTERVAL` | `5m` | Ожидаемые интервалы inventory/topology |
+| `TLS_CERT_FILE`, `TLS_KEY_FILE` | Не заданы | Сертификат и ключ gRPC-сервера |
+| `TLS_CLIENT_CA_FILE` | Не задан | CA для проверки клиентов; включает mTLS |
 
-Конфигурация проверяется при старте. Без сертификата gRPC работает в явно
-локальном development-режиме. Для подключения с другой машины потребуется
-настроить TLS/mTLS на backend и `security.mode: production` у Agent.
-HTTP API в MVP предназначен для локальной разработки и не имеет пользовательской
-авторизации. Для внешнего доступа понадобятся HTTPS и авторизация.
+Monitoring policies описывают ожидаемые интервалы от 3s до 24h и используются
+для оценки свежести данных. Изменение policy не меняет расписание Agent:
+его YAML настраивается вручную.
 
-## 5. Проверки перед передачей команде
+## Интерфейсы
 
-```powershell
-go fmt ./...
-go vet ./...
-go test ./...
-go build ./cmd/server
-docker compose config --quiet
-```
+### gRPC
 
-По умолчанию тесты PostgreSQL пропускаются с явным сообщением. Для их запуска
-подними отдельную тестовую базу и задай:
+`AgentService.Connect` принимает Hello, heartbeat, inventory, telemetry и другие
+известные сообщения Agent. Backend возвращает HelloAck и, при согласованной
+поддержке, MessageACK. Topology, logs, events, telephony, command results и error
+reports сохраняются в архиве сообщений.
 
-```powershell
-$env:TEST_DATABASE_URL='postgres://infrapulse:infrapulse_dev@127.0.0.1:5432/infrapulse?sslmode=disable'
-go test ./... -count=1
-```
+### REST API
 
-Тесты создают собственные временные схемы и удаляют их после завершения. Не
-используй production-базу для тестов. Проверяются rollback целого batch, дубли,
-порядок времени, одинаковые ID у разных агентов, heartbeat, сессии и timeout.
-CI в `.github/workflows/check.yml` запускает тесты с PostgreSQL, race detector
-и сборку Docker. Он выполнится после загрузки кода в GitHub; здесь commit/push
-не выполнялись. Реально выполненные локальные проверки: [docs/validation.md](docs/validation.md).
+| Метод и путь | Назначение |
+|---|---|
+| `GET /api/agents` | Зарегистрированные агенты и состояние связи |
+| `GET /api/devices` | Список устройств с `agent_id`, `limit`, `offset` |
+| `GET /api/devices/{id}` | Карточка устройства |
+| `GET /api/devices/{id}/inventory` | Текущий inventory устройства |
+| `GET /api/devices/{id}/telemetry` | Последнее измерение; `/metrics` — alias |
+| `GET /api/devices/{id}/metrics/history` | История измерений |
+| `GET`, `PUT /api/devices/{id}/monitoring` | Ожидаемые интервалы мониторинга |
+| `GET /healthz`, `GET /readyz` | Состояние процесса и доступность БД |
+| `GET /openapi.json` | OpenAPI-контракт |
 
-## 6. Где что лежит
+В запросах конкретного устройства передавайте `agent_id`, если его ID встречается
+у нескольких collectors. `online` отражает последнее наблюдённое состояние
+устройства, а `agent_connected` — доступность его collector.
 
-- `cmd/server` — запуск, подключение БД, два сервера, корректная остановка;
-- `internal/config` — настройки окружения;
-- `internal/controller` — протокол регистрации и приём stream;
-- `internal/storage` — SQL, миграции и запросы;
-- `internal/api` — REST и OpenAPI;
-- `api/proto`, `api/gen` — точные копии контракта и generated sources Agent;
-- `configs` — примеры подключения существующего Agent;
-- `docs` — контракт frontend, архитектура и результаты проверок.
+## Текущие ограничения
 
-Передавай команде содержимое **InfraPulse-Backend-main**, а не всю папку проекта
-с reference/tools. Сохрани существующий LICENSE. Не добавляй `.env`, state или
-собранные `.exe` в Git. Для просмотра своих изменений достаточно `git status`
-и `git diff`; commit и push выполняются отдельным осознанным шагом.
+- Поддерживается один экземпляр Backend; автоматическая очистка истории отсутствует.
+- Для архивируемых topology/logs/events/telephony/results пока нет отдельных
+  REST API и поиска.
+- Отправка команд, ConfigUpdate, production enrollment, AI и incident engine
+  не реализованы.
+- REST API не имеет встроенной авторизации и HTTPS. Без TLS-сертификатов gRPC
+  работает в development-режиме; Compose публикует порты только на loopback.
+  mTLS проверяет сертификат клиента, но привязка к заявленному Agent ID отсутствует.
 
-## Текущие границы MVP
+## Документация
 
-Один экземпляр Controller, один PostgreSQL. Agents/devices/telemetry — отдельные
-сущности; история соединений — `agent_sessions`. Полные protobuf JSON envelopes
-сохраняются в `agent_messages`, включая logs/topology/events/telephony/results.
-Для них пока нет поиска, отдельных REST-экранов или аналитики.
-
-Нет incident engine, AI, отчётов, отправки команд и глобального reconciliation
-устройств разных collectors. Нет retention и гарантированной доставки Agent:
-его текущий протокол не содержит durable delivery ACK. Дедупликация в базе не
-превращает транспорт в exactly-once. mTLS проверяет CA, но связь сертификата
-с заявленным `agent_id` требует отдельной политики enrollment.
+- [Архитектура](docs/architecture.md) — компоненты и модели хранения.
+- [REST API](docs/api.md) — ответы, параметры и ошибки.
+- [Интервалы мониторинга](docs/monitoring-intervals.md) — policies и freshness.
+- [Надёжная доставка](docs/reliable-delivery.md) — ACK, replay и integration tests.
+- [Генерация protobuf](scripts/README.md) — инструменты и проверка контракта.

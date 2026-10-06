@@ -52,7 +52,7 @@ func testHello() *pb.AgentEnvelope {
 func heartbeat() *pb.AgentEnvelope {
 	return &pb.AgentEnvelope{MessageId: "heartbeat-2", AgentId: "agent-1", SessionId: "session-1", Sequence: 2, SentAt: timestamppb.Now(), Payload: &pb.AgentEnvelope_Heartbeat{Heartbeat: &pb.Heartbeat{Timestamp: timestamppb.Now(), Health: "healthy"}}}
 }
-func testClient(t *testing.T, repo *memoryRepository) pb.AgentServiceClient {
+func testClient(t *testing.T, repo Repository) pb.AgentServiceClient {
 	t.Helper()
 	listener := bufconn.Listen(4 << 20)
 	server := grpc.NewServer()
