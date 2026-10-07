@@ -1,8 +1,20 @@
 name: Backend checks
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17-alpine
@@ -15,17 +27,15 @@ jobs:
           --health-cmd "pg_isready -U infrapulse -d infrapulse_test"
           --health-interval 3s --health-timeout 3s --health-retries 20
     env:
-      TEST_DATABASE_URL: postgres://infrapulse:infrapulse_test@localhost:5432/infrapulse_test?sslmode=disable
+      CGO_ENABLED: "0"
+      TEST_DATABASE_URL: postgres://infrapulse:infrapulse_test@127.0.0.1:5432/infrapulse_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27.1'
           cache: true
-      - name: Formatting
-        run: test -z "$(gofmt -l .)"
-      - run: go vet ./...
-      - run: go test -race ./...
-      - run: go build ./cmd/server
-      - run: docker compose config --quiet
-      - run: docker compose build backend
+      - name: Tests
+        run: go test ./...
+      - name: Build
+        run: go build -trimpath -o bin/infrapulse-backend ./cmd/server

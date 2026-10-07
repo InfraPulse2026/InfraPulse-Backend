@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"time"
 
@@ -126,8 +127,9 @@ func at(ts *timestamppb.Timestamp, fallback time.Time) time.Time {
 	return ts.AsTime().UTC()
 }
 
-// Ingest persists a whole envelope atomically. Duplicate message IDs are harmless
-// only when the complete envelope is identical; changed contents are rejected.
+// Ingest persists the inbox and domain effects in one transaction and returns
+// success only after commit. A replay may change its transport attempt metadata,
+// but reusing a message ID for a different kind or business payload is rejected.
 func (s *Store) Ingest(ctx context.Context, e *pb.AgentEnvelope) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
@@ -176,13 +178,25 @@ func (s *Store) Ingest(ctx context.Context, e *pb.AgentEnvelope) error {
 	}
 	if result.RowsAffected() == 0 {
 		var identical bool
-		if err = tx.QueryRow(ctx, `SELECT payload=$3::jsonb FROM agent_messages WHERE agent_id=$1 AND message_id=$2`, e.AgentId, e.MessageId, raw).Scan(&identical); err != nil {
+		// Strip only outer attempt metadata. Nested business timestamps and
+		// session IDs remain part of the comparison. Compare archived JSONB
+		// directly so rows written before application ACK support need no
+		// migration, fingerprint backfill, or lossy protobuf re-decoding.
+		if err = tx.QueryRow(ctx, `SELECT kind=$4 AND
+		(payload - ARRAY['sequence','sent_at','session_id']) =
+		($3::jsonb - ARRAY['sequence','sent_at','session_id'])
+		FROM agent_messages WHERE agent_id=$1 AND message_id=$2`, e.AgentId, e.MessageId, raw, Kind(e)).Scan(&identical); err != nil {
 			return err
 		}
 		if !identical {
+			slog.WarnContext(ctx, "duplicate message conflict", "agent_id", e.AgentId, "message_id", e.MessageId, "kind", Kind(e))
 			return ErrMessageConflict
 		}
-		return tx.Commit(ctx)
+		if err = tx.Commit(ctx); err != nil {
+			return err
+		}
+		slog.DebugContext(ctx, "duplicate message accepted", "agent_id", e.AgentId, "message_id", e.MessageId, "kind", Kind(e))
+		return nil
 	}
 	switch p := e.Payload.(type) {
 	case *pb.AgentEnvelope_Hello:

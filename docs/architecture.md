@@ -14,11 +14,14 @@ HTML с архитектурой Agent и сопутствующие реком�
 Сервис `/infrapulse.v1.AgentService/Connect`, постоянный двунаправленный stream.
 Первое сообщение — matching `AgentHello` с `protocol_version=1`.
 Проверяются обязательные ID/timestamps, совпадение agent/session identity,
-рост sequence, валидность дат и конечность чисел. Пропуски sequence допустимы:
-текущая RAM-очередь Agent может терять сообщения.
+рост sequence, валидность дат и конечность чисел. Sequence относится к попытке
+отправки в stream; пропуски допустимы. Logical message ID остаётся стабильным
+при replay, включая восстановление durable outbox после restart Agent.
 
 Backend сначала фиксирует регистрацию и устройство в транзакции, затем
-отправляет `HelloAck{accepted:true, protocol_version:1}`. В существующем контракте
+отправляет `HelloAck{accepted:true, protocol_version:1, application_ack:true}`,
+если Agent запросил application ACK. Старые клиенты без запроса сохраняют прежний
+HelloAck без дополнительных MessageACK. В существующем контракте
 нет server time, heartbeat interval или config revision в HelloAck. Эти поля
 потребуют согласованного изменения proto в Agent и Backend.
 
@@ -40,8 +43,19 @@ session. При старте Controller сбрасывает сохранённ�
 
 Одна транзакция на envelope: сообщение, batch samples и изменения устройств
 фиксируются вместе. Уникальность `(agent_id,message_id)` убирает повторную
-запись одинакового envelope. Повтор ID с изменёнными данными отклоняется.
+обработку logical message. Duplicate сравнивается по kind и JSONB без внешних
+`sequence`, `sent_at`, `session_id`; вложенные business поля остаются значимыми.
+Такое сравнение работает и для прежних строк без migration/backfill. Повтор ID
+с другим business payload отклоняется и откатывает транзакцию.
 Hello при reconnect восстанавливает регистрацию, сохраняя историю измерений.
+
+После успешного `Store.Ingest()` и COMMIT Controller отправляет `MessageACK`.
+Accepted duplicate тоже получает ACK, не повторяя domain effect. Ошибка validation,
+SQL или COMMIT означает отсутствие ACK. Если ACK потерян после commit, Agent
+повторяет сообщение. Session tracking обновляется независимо от dedup, внутри
+той же транзакции. Все исходящие сообщения проходят сериализованный send path.
+Unknown protobuf fields отклоняются до JSON archive, чтобы ACK не подтверждал
+потерю содержимого, которое эта версия Backend не умеет сохранять.
 
 Пара `(agent_id,device_id)` защищает устройства одинакового ID у разных
 collectors от перезаписи. Глобальная дедупликация физических устройств будет
@@ -60,22 +74,14 @@ time и AGENT_TIMEOUT. Устройства не удаляются при за�
 
 ## Контракт и generated code
 
-Файлы `agent.proto`, `agent.pb.go`, `agent_grpc.pb.go` скопированы из Agent ZIP
-без изменения. Protobuf package, service names и field numbers совпадают.
-Сам Agent не редактировался. Обычной сборке `protoc` не нужен.
+Source of truth — `InfraPulseAgent/api/proto/infrapulse/v1/agent.proto` (P3).
+Backend copy отличается только `go_package` под собственный module path.
+Protobuf package, service names, прежние field numbers/types и enum values
+сохранены. Сам Agent не редактировался. Обычной сборке `protoc` не нужен.
 
-`go_package` в proto и descriptor сохраняет имя модуля Agent; backend импортирует
-локальную копию generated package под собственным module path. Для будущей
-генерации из общего proto используй mapping, не меняя wire contract:
-
-```sh
-protoc -I api/proto \
-  --go_out=api/gen --go_opt=paths=source_relative \
-  --go_opt=Minfrapulse/v1/agent.proto=github.com/InfraPulse2026/InfraPulse-Backend/api/gen/infrapulse/v1 \
-  --go-grpc_out=api/gen --go-grpc_opt=paths=source_relative \
-  --go-grpc_opt=Minfrapulse/v1/agent.proto=github.com/InfraPulse2026/InfraPulse-Backend/api/gen/infrapulse/v1 \
-  api/proto/infrapulse/v1/agent.proto
-```
-
-Оба проекта должны согласовывать изменения proto. Не добавляй поля HelloAck
-только на стороне backend и не меняй номера существующих полей.
+`scripts/generate-proto.ps1` и `.sh` требуют protoc 33.5, protoc-gen-go
+v1.36.12 и protoc-gen-go-grpc v1.6.0. Режим `-Check` / `--check` сверяет canonical
+Agent proto и проверяет reproducible generation обоих generated files.
+`api/proto/contract_test.go` дополнительно сравнивает все прежние wire fields
+и enums с сохранённым descriptor P2, проверяет P3 fields и archive roundtrip.
+Инструкции воспроизведения — [reliable-delivery.md](reliable-delivery.md).
