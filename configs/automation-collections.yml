@@ -1,0 +1,11 @@
+---
+# Top-level collection versions verified against Ansible Galaxy on 2026-10-12.
+collections:
+  - name: ansible.netcommon
+    version: 8.7.1
+  - name: cisco.ios
+    version: 11.6.0
+  - name: arista.eos
+    version: 12.3.0
+  - name: vyos.vyos
+    version: 6.1.0

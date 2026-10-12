@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -37,19 +38,22 @@ func TestApplicationACKForEveryAcceptedKind(t *testing.T) {
 		t.Fatalf("ACK negotiation failed: %v %v", ack, err)
 	}
 	now := timestamppb.Now()
+	sipCode := uint32(401)
+	sipLatency := 0.0
 	messages := []*pb.AgentEnvelope{
 		heartbeat(),
 		{Payload: &pb.AgentEnvelope_Telemetry{Telemetry: &pb.TelemetryBatch{Samples: []*pb.TelemetrySample{{DeviceId: "device-1", Source: "linux", ObservedAt: now, CollectedAt: now}}}}},
 		{Payload: &pb.AgentEnvelope_Inventory{Inventory: &pb.InventoryUpdate{ObservedAt: now, Devices: []*pb.Device{{Id: "device-1"}}}}},
-		{Payload: &pb.AgentEnvelope_Topology{Topology: &pb.TopologyUpdate{DeviceId: "device-1", ObservedAt: now}}},
+		{Payload: &pb.AgentEnvelope_Topology{Topology: &pb.TopologyUpdate{DeviceId: "device-1", Source: "simulated", ObservedAt: now}}},
 		{Payload: &pb.AgentEnvelope_Logs{Logs: &pb.LogBatch{ObservedAt: now}}},
 		{Payload: &pb.AgentEnvelope_Events{Events: &pb.EventBatch{Events: []*pb.Event{{Id: "event-1"}}}}},
 		{Payload: &pb.AgentEnvelope_Telephony{Telephony: &pb.TelephonyUpdate{ObservedAt: now}}},
+		{Payload: &pb.AgentEnvelope_Telephony{Telephony: &pb.TelephonyUpdate{ObservedAt: now, Source: "sip.options", Targets: []*pb.TelephonyHealth{{TargetId: "pbx", Address: "pbx:5061", Transport: "tls", Reachable: true, ResponseCode: &sipCode, LatencyMs: &sipLatency, ObservedAt: now, State: "degraded", Source: "sip.options"}}}}},
 		{Payload: &pb.AgentEnvelope_CommandResult{CommandResult: &pb.CommandResult{CommandId: "command-1", SnapshotId: "snapshot-1"}}},
 		{Payload: &pb.AgentEnvelope_Error{Error: &pb.ErrorReport{Component: "collector", Timestamp: now}}},
 	}
 	for i, e := range messages {
-		e.MessageId = storage.Kind(e)
+		e.MessageId = fmt.Sprintf("%s-%d", storage.Kind(e), i)
 		e.AgentId, e.SessionId, e.Sequence, e.SentAt = "agent-1", "session-1", uint64(i+2), now
 		if err = stream.Send(e); err != nil {
 			t.Fatal(err)

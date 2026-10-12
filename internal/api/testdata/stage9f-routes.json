@@ -1,0 +1,357 @@
+[
+  {
+    "method": "GET",
+    "path": "/api/auth/me",
+    "permission": "\"\""
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "permission": "\"\""
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/logout-all",
+    "permission": "\"\""
+  },
+  {
+    "method": "POST",
+    "path": "/api/auth/password",
+    "permission": "\"\""
+  },
+  {
+    "method": "GET",
+    "path": "/api/access/users",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "POST",
+    "path": "/api/access/users",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/access/users/{id}",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "POST",
+    "path": "/api/access/users/{id}/password",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/access/audit",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/health/rules",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/reports/summary",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/reports/snapshots",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "POST",
+    "path": "/api/reports/snapshots",
+    "permission": "access.ReportWrite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/reports/snapshots/{id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/agents/{id}/health",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/interfaces/health",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/interfaces/{interface_id}/health",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/telephony/targets/{id}/health",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/health",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents/{id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents/{id}/evidence",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents/{id}/context",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "POST",
+    "path": "/api/incidents/{id}/analysis/preview",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "POST",
+    "path": "/api/incidents/{id}/analysis",
+    "permission": "access.AnalysisWrite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents/{id}/analyses",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/analyses/{analysis_id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/incidents/{id}/transitions",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "POST",
+    "path": "/api/incidents/{id}/acknowledge",
+    "permission": "access.IncidentWrite"
+  },
+  {
+    "method": "POST",
+    "path": "/api/pki/bootstrap-tokens",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/pki/bootstrap-tokens",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "POST",
+    "path": "/api/pki/bootstrap-tokens/{id}/revoke",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/pki/certificates",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "POST",
+    "path": "/api/pki/certificates/{id}/revoke",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/pki/audit",
+    "permission": "access.AccessManage"
+  },
+  {
+    "method": "GET",
+    "path": "/api/commands",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "POST",
+    "path": "/api/commands",
+    "permission": "access.CommandWrite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/commands/{id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/commands/{id}/events",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/commands/policy",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "POST",
+    "path": "/api/commands/{id}/rollback",
+    "permission": "access.CommandWrite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/commands/{id}/snapshot",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/snapshots",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/agents",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/availability/summary",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/telephony/targets",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/telephony/targets/{id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/telephony/targets/{id}/history",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/telephony/targets/{id}/monitoring",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/telephony/targets/{id}/monitoring",
+    "permission": "access.MonitoringWrite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/telephony/summary",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/summary",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/logs/{id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit/events",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/audit/events/{key}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/logs",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/audit",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/topology",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/topology",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/availability",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/availability/history",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/inventory",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/monitoring",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "PUT",
+    "path": "/api/devices/{id}/monitoring",
+    "permission": "access.MonitoringWrite"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/metrics",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/telemetry",
+    "permission": "access.DataRead"
+  },
+  {
+    "method": "GET",
+    "path": "/api/devices/{id}/metrics/history",
+    "permission": "access.DataRead"
+  }
+]

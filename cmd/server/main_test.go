@@ -44,7 +44,7 @@ func TestServerStartupReadinessAndShutdown(t *testing.T) {
 	t.Setenv("DATABASE_URL", u.String())
 	t.Setenv("HTTP_ADDRESS", httpAddress)
 	t.Setenv("GRPC_ADDRESS", grpcAddress)
-	for _, key := range []string{"TLS_CERT_FILE", "TLS_KEY_FILE", "TLS_CLIENT_CA_FILE", "AGENT_TIMEOUT", "DEFAULT_TELEMETRY_INTERVAL", "DEFAULT_INVENTORY_INTERVAL", "DEFAULT_TOPOLOGY_INTERVAL"} {
+	for _, key := range []string{"TLS_CERT_FILE", "TLS_KEY_FILE", "TLS_CLIENT_CA_FILE", "AGENT_TIMEOUT", "DEFAULT_TELEMETRY_INTERVAL", "DEFAULT_INVENTORY_INTERVAL", "DEFAULT_TOPOLOGY_INTERVAL", "AUTH_MODE", "AUTH_SESSION_TTL", "AUTH_PUBLIC_ORIGIN", "AUTH_COOKIE_SECURE"} {
 		t.Setenv(key, "")
 	}
 	ctx, cancel := context.WithCancel(context.Background())

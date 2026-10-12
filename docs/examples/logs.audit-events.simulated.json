@@ -1,0 +1,69 @@
+{
+  "items": [
+    {
+      "cursor_id": 8,
+      "key": "audit:c364e1fe03b09dd0d1cc838bce403ee7d0ff8567b2bee4afc04b3e405f4713ff",
+      "agent_id": "271c1729-34ca-46cc-8596-c790bd125a12",
+      "device_id": "simulated:device-001",
+      "source": "simulated",
+      "source_id": "simulated:audit",
+      "file_identity": "",
+      "host": "",
+      "event_id": "1791403537.000:5",
+      "first_event_at": "2026-10-07T20:05:37Z",
+      "last_event_at": "2026-10-07T20:05:37Z",
+      "first_received_at": "2026-10-07T20:05:38.27277Z",
+      "last_received_at": "2026-10-07T20:05:38.27277Z",
+      "record_count": 1,
+      "record_types": [
+        "SYSCALL"
+      ],
+      "outcome": "failure",
+      "completeness": "unknown"
+    },
+    {
+      "cursor_id": 6,
+      "key": "audit:e774f16fd87cd0900e7669112027c4e35407dc222f35cb04d80da84357e34fc9",
+      "agent_id": "271c1729-34ca-46cc-8596-c790bd125a12",
+      "device_id": "simulated:device-001",
+      "source": "simulated",
+      "source_id": "simulated:audit",
+      "file_identity": "",
+      "host": "",
+      "event_id": "1791403536.000:4",
+      "first_event_at": "2026-10-07T20:05:36Z",
+      "last_event_at": "2026-10-07T20:05:36Z",
+      "first_received_at": "2026-10-07T20:05:37.232102Z",
+      "last_received_at": "2026-10-07T20:05:37.232102Z",
+      "record_count": 1,
+      "record_types": [
+        "SYSCALL"
+      ],
+      "outcome": "failure",
+      "completeness": "unknown"
+    },
+    {
+      "cursor_id": 4,
+      "key": "audit:5835c54d40a0ece372aa506f1651049d2075e5c105729ee1aeba3ed8b4c9401d",
+      "agent_id": "271c1729-34ca-46cc-8596-c790bd125a12",
+      "device_id": "simulated:device-001",
+      "source": "simulated",
+      "source_id": "simulated:audit",
+      "file_identity": "",
+      "host": "",
+      "event_id": "1791403535.000:3",
+      "first_event_at": "2026-10-07T20:05:35Z",
+      "last_event_at": "2026-10-07T20:05:35Z",
+      "first_received_at": "2026-10-07T20:05:36.232441Z",
+      "last_received_at": "2026-10-07T20:05:36.232441Z",
+      "record_count": 1,
+      "record_types": [
+        "SYSCALL"
+      ],
+      "outcome": "failure",
+      "completeness": "unknown"
+    }
+  ],
+  "next_before_id": null,
+  "limit": 100
+}

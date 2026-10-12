@@ -1,0 +1,60 @@
+{
+  "items": [
+    {
+      "id": 25,
+      "agent_id": "b0d6c40c-76f6-4e2a-b9f9-0e1d88aa3740",
+      "target_id": "simulated:sip-001",
+      "message_id": "9bacbaca-3a92-4954-9ba0-7347499d0640",
+      "address": "192.0.2.1:5060",
+      "transport": "udp",
+      "source": "simulated",
+      "reachable": true,
+      "response_code": 200,
+      "latency_ms": 21,
+      "observed_at": "2026-10-07T21:13:52Z",
+      "received_at": "2026-10-07T21:13:52.672Z",
+      "consecutive_failures": 0,
+      "state": "up",
+      "error_category": "",
+      "clock_skew": false
+    },
+    {
+      "id": 21,
+      "agent_id": "b0d6c40c-76f6-4e2a-b9f9-0e1d88aa3740",
+      "target_id": "simulated:sip-001",
+      "message_id": "fde3aa9f-29f5-4b1f-a9a5-e84cccdc057d",
+      "address": "192.0.2.1:5060",
+      "transport": "udp",
+      "source": "simulated",
+      "reachable": true,
+      "response_code": 200,
+      "latency_ms": 21,
+      "observed_at": "2026-10-07T21:13:51Z",
+      "received_at": "2026-10-07T21:13:51.646551Z",
+      "consecutive_failures": 0,
+      "state": "up",
+      "error_category": "",
+      "clock_skew": false
+    },
+    {
+      "id": 17,
+      "agent_id": "b0d6c40c-76f6-4e2a-b9f9-0e1d88aa3740",
+      "target_id": "simulated:sip-001",
+      "message_id": "cfc99285-88ad-4c3b-8faa-48f069ecd04b",
+      "address": "192.0.2.1:5060",
+      "transport": "udp",
+      "source": "simulated",
+      "reachable": false,
+      "response_code": null,
+      "latency_ms": null,
+      "observed_at": "2026-10-07T21:13:50Z",
+      "received_at": "2026-10-07T21:13:50.671866Z",
+      "consecutive_failures": 3,
+      "state": "down",
+      "error_category": "timeout",
+      "clock_skew": false
+    }
+  ],
+  "next_before_id": 17,
+  "limit": 3
+}

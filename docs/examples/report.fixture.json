@@ -1,0 +1,110 @@
+{
+  "scenario": "synthetic_report_lifecycle_fixture",
+  "report": {
+    "rule_groups_truncated": false,
+    "version": "1",
+    "generated_at": "2026-10-09T00:24:03.861039+03:00",
+    "filter": {
+      "from": "2026-10-08T20:24:03Z",
+      "to": "2026-10-08T20:25:43Z",
+      "agent_id": "",
+      "source": "",
+      "resource_kind": "",
+      "top_limit": 20
+    },
+    "stats": {
+      "overlapping_incidents": 4,
+      "opened_in_period": 3,
+      "carried_in": 1,
+      "resolved_in_period": 2,
+      "active_at_end": 2,
+      "acknowledged_in_period": 1,
+      "summed_incident_seconds": 140,
+      "mean_acknowledgment_delay_seconds": 20,
+      "mean_resolution_delay_seconds": 40,
+      "real_source_episodes": 3,
+      "simulated_source_episodes": 1
+    },
+    "by_rule": [
+      {
+        "rule_id": "cpu.sustained",
+        "source": "linux",
+        "simulated": false,
+        "overlapping_incidents": 3,
+        "opened_in_period": 2,
+        "summed_incident_seconds": 120
+      },
+      {
+        "rule_id": "cpu.sustained",
+        "source": "simulated",
+        "simulated": true,
+        "overlapping_incidents": 1,
+        "opened_in_period": 1,
+        "summed_incident_seconds": 20
+      }
+    ],
+    "top_resources": [
+      {
+        "agent_id": "agent-1",
+        "device_id": "shared-router",
+        "resource_kind": "device",
+        "resource_id": "",
+        "resource_context": "",
+        "source": "linux",
+        "scope": "",
+        "overlapping_incidents": 3,
+        "summed_incident_seconds": 120
+      },
+      {
+        "agent_id": "agent-1",
+        "device_id": "shared-router",
+        "resource_kind": "device",
+        "resource_id": "",
+        "resource_context": "",
+        "source": "simulated",
+        "scope": "demo-session",
+        "overlapping_incidents": 1,
+        "summed_incident_seconds": 20
+      }
+    ],
+    "recurring": [
+      {
+        "agent_id": "agent-1",
+        "device_id": "shared-router",
+        "resource_kind": "device",
+        "resource_id": "",
+        "resource_context": "",
+        "source": "linux",
+        "scope": "",
+        "overlapping_incidents": 3,
+        "summed_incident_seconds": 120,
+        "rule_id": "cpu.sustained",
+        "opened_occurrences": 2,
+        "first_opened_at": "2026-10-08T23:24:33+03:00",
+        "last_opened_at": "2026-10-08T23:24:43+03:00"
+      }
+    ],
+    "quality": {
+      "filter_scope": "agent_and_source; resource_kind does not restrict raw sample quality counts",
+      "telemetry_samples_received": 0,
+      "received_samples_without_cpu": 0,
+      "received_samples_with_future_clock": 0,
+      "received_samples_more_than_5m_late": 0,
+      "sip_samples_received": 0,
+      "received_sip_samples_without_latency": 0,
+      "availability_percent": null,
+      "coverage_status": "received_samples_only_not_uptime"
+    },
+    "methodology": [
+      "period is [from,to); report reads one repeatable-read database snapshot",
+      "durations use backend incident detection/resolution time, clipped to the requested period",
+      "summed incident seconds may overlap across rules/resources and are not downtime or availability",
+      "active_at_end includes incidents resolved exactly at to; those resolutions belong to the next period",
+      "acknowledgment/resolution means use full delay since detection for events inside the requested period",
+      "recurrence requires at least two occurrences opened inside the period for the same resource/rule/source/scope/context",
+      "simulated sources/sessions remain explicit; absence of incidents does not prove a healthy or observed network",
+      "quality counts use received_at; raw missing values may represent unsupported metrics, not collector failures",
+      "report contents are detection evidence and do not establish a network root cause"
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "expected_interval_seconds": 86400,
+  "stale_after_seconds": 172830,
+  "origin": "target_override",
+  "delivery_mode": "manual_agent_yaml",
+  "application_status": "unverified",
+  "agent_yaml_fragment": "telephony:\n  endpoints:\n    - id: \"simulated:sip-001\"\n      interval: 86400s\n"
+}

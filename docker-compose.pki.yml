@@ -1,0 +1,20 @@
+# Optional overlay: docker compose -f docker-compose.yml -f docker-compose.pki.yml up --build -d
+# PKI_SECRETS_DIR must reference prepared, access-restricted credentials.
+services:
+  backend:
+    environment:
+      PKI_ENABLED: "true"
+      PKI_ADDRESS: 0.0.0.0:9444
+      PKI_CA_FILE: /run/infrapulse-pki/ca.pem
+      PKI_CA_KEY_FILE: /run/infrapulse-pki/ca.key
+      PKI_CERT_LIFETIME: ${PKI_CERT_LIFETIME:-720h}
+      TLS_CERT_FILE: /run/infrapulse-pki/server.pem
+      TLS_KEY_FILE: /run/infrapulse-pki/server.key
+      TLS_CLIENT_CA_FILE: /run/infrapulse-pki/ca.pem
+    volumes:
+      - type: bind
+        source: ${PKI_SECRETS_DIR:?Set PKI_SECRETS_DIR to a prepared credentials directory}
+        target: /run/infrapulse-pki
+        read_only: true
+    ports:
+      - "127.0.0.1:${PKI_PORT:-9444}:9444"

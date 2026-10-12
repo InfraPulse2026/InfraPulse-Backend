@@ -15,10 +15,20 @@ import (
 	"time"
 
 	pb "github.com/InfraPulse2026/InfraPulse-Backend/api/gen/infrapulse/v1"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/access"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/analysisai"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/api"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/collectorconfig"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/commands"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/config"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/controller"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/datasources"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/health"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/pki"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/prometheus"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/storage"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/topology"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/zabbix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -41,13 +51,39 @@ func run(ctx context.Context, log *slog.Logger) error {
 	}
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	store, err := storage.Open(startup, cfg.DatabaseURL, cfg.AgentTimeout, cfg.MonitoringDefaults)
+	store, err := storage.Open(startup, cfg.DatabaseURL, cfg.AgentTimeout, cfg.MonitoringDefaults, cfg.TelephonyIntervalSeconds)
 	if err != nil {
 		return fmt.Errorf("connect to PostgreSQL: %w", err)
 	}
 	defer store.Close()
 	if err = store.Migrate(startup); err != nil {
 		return fmt.Errorf("migrate PostgreSQL: %w", err)
+	}
+	store.ConfigureCommands(cfg.Commands)
+	store.ConfigureAssetResolution(cfg.AssetAutoResolution, cfg.AssetResolutionMaxAge)
+	if err = store.ConfigureDataSources(startup, cfg.DataSourceVault); err != nil {
+		return err
+	}
+	sourceRegistry, err := store.CollectorOperations().With(zabbix.New(cfg.DataSourceNetwork).Operations()...)
+	if err != nil {
+		return err
+	}
+	store.ConfigureDataSourceOperations(sourceRegistry)
+	prometheusConnector := prometheus.New(cfg.DataSourceNetwork)
+	sourceRegistry, err = sourceRegistry.With(prometheusConnector.Operations()...)
+	if err != nil {
+		return err
+	}
+	store.ConfigureDataSourceOperations(sourceRegistry)
+	store.ConfigurePrometheus(prometheusConnector)
+	if err = store.ConfigureHealth(cfg.Health); err != nil {
+		return err
+	}
+	if err = store.RecoverCommands(startup); err != nil {
+		return fmt.Errorf("recover command states: %w", err)
+	}
+	if err = store.RecoverJobs(startup); err != nil {
+		return fmt.Errorf("recover AI jobs: %w", err)
 	}
 	options := []grpc.ServerOption{grpc.MaxRecvMsgSize(4 << 20), grpc.MaxSendMsgSize(4 << 20)}
 	if cfg.TLSCert != "" {
@@ -60,7 +96,72 @@ func run(ctx context.Context, log *slog.Logger) error {
 		log.Warn("development gRPC without TLS; use local published ports only")
 	}
 	g := grpc.NewServer(options...)
-	pb.RegisterAgentServiceServer(g, controller.New(store, log))
+	var pkiService *pki.Service
+	var enrollmentTLS *tls.Config
+	if cfg.PKI.Enabled {
+		caPEM, e := os.ReadFile(cfg.PKI.CAFile)
+		if e != nil {
+			return fmt.Errorf("read issuing CA: %w", e)
+		}
+		keyPEM, e := os.ReadFile(cfg.PKI.CAKeyFile)
+		if e != nil {
+			return fmt.Errorf("read issuing key: %w", e)
+		}
+		issuer, e := pki.NewIssuer(caPEM, keyPEM, cfg.PKI.Lifetime)
+		if e != nil {
+			return e
+		}
+		clientCA, e := os.ReadFile(cfg.TLSClientCA)
+		if e != nil {
+			return e
+		}
+		if e = pki.CheckTrust(caPEM, clientCA); e != nil {
+			return e
+		}
+		pair, e := tls.LoadX509KeyPair(cfg.PKI.CertFile, cfg.PKI.KeyFile)
+		if e != nil {
+			return e
+		}
+		pool := x509.NewCertPool()
+		pool.AppendCertsFromPEM(caPEM)
+		enrollmentTLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}, ClientCAs: pool, ClientAuth: tls.VerifyClientCertIfGiven}
+		pkiService = &pki.Service{Repository: store, Issuer: issuer}
+	}
+	store.ConfigureCollectorConfig(cfg.CollectorConfigEnabled)
+	if err = store.ConfigureAutomation(startup, cfg.AutomationEnabled, cfg.AutomationVault); err != nil {
+		return err
+	}
+	if err = store.ConfigureConfigurationDrift(cfg.ConfigurationDriftMaxAge); err != nil {
+		return err
+	}
+	controllerOptions := []controller.Option{controller.WithManagedConfiguration(cfg.CollectorConfigEnabled)}
+	if pkiService != nil {
+		controllerOptions = append(controllerOptions, controller.WithAgentAuthorizer(pkiService.AuthorizePeer))
+	} else if cfg.TLSClientCA != "" {
+		controllerOptions = append(controllerOptions, controller.WithAgentAuthorizer(pki.AuthorizePeer))
+	}
+	control := controller.New(store, log, controllerOptions...)
+	if pkiService != nil {
+		pkiService.OnRevoke = control.DisconnectAgent
+	}
+	pb.RegisterAgentServiceServer(g, control)
+	workerCtx, workerStop := context.WithCancel(ctx)
+	defer workerStop()
+	configDone := make(chan struct{})
+	go func() { defer close(configDone); collectorconfig.Run(workerCtx, store, control, log) }()
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); commands.Run(workerCtx, store, control, log) }()
+	collectorDone := make(chan struct{})
+	topologyDone := make(chan struct{})
+	go func() { defer close(topologyDone); topology.RunExpiry(workerCtx, store, log) }()
+	go func() { defer close(collectorDone); health.RunCollectors(workerCtx, store, log) }()
+	aiDone := make(chan struct{})
+	sourceDone := make(chan struct{})
+	go func() { defer close(sourceDone); datasources.Run(workerCtx, store, sourceRegistry, log) }()
+	go func() {
+		defer close(aiDone)
+		analysisai.Run(workerCtx, store, analysisai.NewResponsesProvider(cfg.AI), cfg.AI, log)
+	}()
 	grpcListener, err := net.Listen("tcp", cfg.GRPCAddress)
 	if err != nil {
 		return err
@@ -71,8 +172,27 @@ func run(ctx context.Context, log *slog.Logger) error {
 		return err
 	}
 	defer httpListener.Close()
-	h := &http.Server{Handler: api.New(store, log), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
-	results := make(chan error, 2)
+	apiOptions := []api.Option{api.WithAccess(access.New(store, cfg.Access)), api.WithCommands(store), api.WithIncidents(store), api.WithReports(store), api.WithAI(store, cfg.AI), api.WithDataSources(store), api.WithAssets(store), api.WithCollectorConfig(store), api.WithAutomation(store), api.WithConfigurationDrift(store)}
+	if pkiService != nil {
+		apiOptions = append(apiOptions, api.WithPKI(pkiService))
+	}
+	if cfg.Access.Mode == "disabled" {
+		apiOptions = append(apiOptions, api.WithDevelopmentAuthDisabled())
+		log.Warn("HTTP authentication explicitly disabled on loopback")
+	}
+	h := &http.Server{Handler: api.New(store, log, apiOptions...), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	results := make(chan error, 3)
+	var enrollmentServer *http.Server
+	if pkiService != nil {
+		listener, e := net.Listen("tcp", cfg.PKI.Address)
+		if e != nil {
+			return e
+		}
+		defer listener.Close()
+		enrollmentServer = &http.Server{Handler: pkiService.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16 << 10}
+		go func() { results <- enrollmentServer.Serve(tls.NewListener(listener, enrollmentTLS)) }()
+		log.Info("PKI enrollment listener ready", "https", cfg.PKI.Address)
+	}
 	go func() { results <- g.Serve(grpcListener) }()
 	go func() { results <- h.Serve(httpListener) }()
 	log.Info("backend ready", "http", cfg.HTTPAddress, "grpc", cfg.GRPCAddress)
@@ -82,10 +202,40 @@ func run(ctx context.Context, log *slog.Logger) error {
 	case serveErr = <-results:
 	}
 	shutdown, done := context.WithTimeout(context.Background(), 5*time.Second)
+	workerStop()
+	select {
+	case <-configDone:
+	case <-shutdown.Done():
+	}
+	select {
+	case <-workerDone:
+	case <-shutdown.Done():
+	}
+	select {
+	case <-collectorDone:
+	case <-shutdown.Done():
+	}
+	select {
+	case <-aiDone:
+	case <-shutdown.Done():
+	}
+	select {
+	case <-sourceDone:
+	case <-shutdown.Done():
+	}
+	select {
+	case <-topologyDone:
+	case <-shutdown.Done():
+	}
 	defer done()
 	grpcDone := make(chan struct{})
 	go func() { g.GracefulStop(); close(grpcDone) }()
 	httpErr := h.Shutdown(shutdown)
+	if enrollmentServer != nil {
+		if err := enrollmentServer.Shutdown(shutdown); err != nil {
+			_ = enrollmentServer.Close()
+		}
+	}
 	if httpErr != nil {
 		_ = h.Close()
 	}

@@ -5,6 +5,11 @@ differs only in `go_package`, which points at the Backend Go module. Existing
 field numbers and enum values must stay compatible with the frozen P2 descriptor
 tested by `go test ./api/proto`.
 
+At Backend v2 B4.1 the canonical source is Collector commit
+215d33a4a5fbc2a12c57d31e516b0ad33f7ae574 (Phase8A). Both frozen
+P2 and Stage9F descriptors remain compatibility baselines. Set AGENT_ROOT or
+-AgentRoot explicitly when using the new Collector checkout.
+
 Generation pins protoc **33.5**, protoc-gen-go **v1.36.12**, and
 protoc-gen-go-grpc **v1.6.0**. Obtain protoc from the official protobuf 33.5
 release; install plugins with:

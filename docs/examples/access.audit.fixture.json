@@ -1,0 +1,116 @@
+{
+  "items": [
+    {
+      "id": 10,
+      "actor_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "target_id": "usr_02dbfc19f548e8215b97710344990dd1",
+      "action": "user_access_changed",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "350bca98d8898bcb807a1385ee0bf432",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.66393Z"
+    },
+    {
+      "id": 9,
+      "actor_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "target_id": null,
+      "action": "monitoring_changed",
+      "outcome": "success",
+      "resource": "device:fa7210ff-c4e9-447b-9b2f-2b09ee2cdb48:simulated:agent:fa7210ff-c4e9-447b-9b2f-2b09ee2cdb48",
+      "request_id": "5bc2e5da0c93833c134dba214fd05399",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.653678Z"
+    },
+    {
+      "id": 8,
+      "actor_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "target_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "action": "login",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "512c4631e2a3d96f96c96bd5578becd5",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.525111Z"
+    },
+    {
+      "id": 7,
+      "actor_id": "usr_b1ae8f1c48ef08db8d97925f9f988541",
+      "target_id": null,
+      "action": "monitoring_changed",
+      "outcome": "success",
+      "resource": "device:fa7210ff-c4e9-447b-9b2f-2b09ee2cdb48:simulated:agent:fa7210ff-c4e9-447b-9b2f-2b09ee2cdb48",
+      "request_id": "cd4a54fe5ae41bfd8bbc7570436d91e8",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.405606Z"
+    },
+    {
+      "id": 6,
+      "actor_id": "usr_b1ae8f1c48ef08db8d97925f9f988541",
+      "target_id": "usr_b1ae8f1c48ef08db8d97925f9f988541",
+      "action": "login",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "a24a0e3bacc68ebaea8104defeaef07f",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.316528Z"
+    },
+    {
+      "id": 5,
+      "actor_id": "usr_02dbfc19f548e8215b97710344990dd1",
+      "target_id": "usr_02dbfc19f548e8215b97710344990dd1",
+      "action": "login",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "549ad43c5a354efe91050daf9de74f7f",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.200302Z"
+    },
+    {
+      "id": 4,
+      "actor_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "target_id": "usr_b1ae8f1c48ef08db8d97925f9f988541",
+      "action": "user_created",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "8f6babad3919193452a209eaa846cc55",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:24.077524Z"
+    },
+    {
+      "id": 3,
+      "actor_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "target_id": "usr_02dbfc19f548e8215b97710344990dd1",
+      "action": "user_created",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "851f21a04abe69c61a8f6625ca423a8c",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:23.933343Z"
+    },
+    {
+      "id": 2,
+      "actor_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "target_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "action": "login",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "8b81ba868764a8150304310d6fe44b34",
+      "peer": "127.0.0.1",
+      "at": "2026-10-08T10:04:23.787607Z"
+    },
+    {
+      "id": 1,
+      "actor_id": null,
+      "target_id": "usr_1bbb2515cd17c557da57fc93a62b5e28",
+      "action": "admin_bootstrap",
+      "outcome": "success",
+      "resource": "",
+      "request_id": "local-bootstrap",
+      "peer": "local-cli",
+      "at": "2026-10-08T10:04:23.64046Z"
+    }
+  ],
+  "limit": 100,
+  "offset": 0
+}

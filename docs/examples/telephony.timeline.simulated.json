@@ -1,0 +1,128 @@
+[
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:46.9896574Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:47.5121338Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:48.0265235Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:48.5366778Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "degraded",
+    "read_at": "2026-10-07T21:13:49.0544920Z",
+    "status": "degraded",
+    "latency_ms": null,
+    "reachable": false,
+    "response_code": null,
+    "failures": 1
+  },
+  {
+    "reported_state": "degraded",
+    "read_at": "2026-10-07T21:13:49.5629414Z",
+    "status": "degraded",
+    "latency_ms": null,
+    "reachable": false,
+    "response_code": null,
+    "failures": 1
+  },
+  {
+    "reported_state": "degraded",
+    "read_at": "2026-10-07T21:13:50.0812651Z",
+    "status": "degraded",
+    "latency_ms": null,
+    "reachable": false,
+    "response_code": null,
+    "failures": 2
+  },
+  {
+    "reported_state": "degraded",
+    "read_at": "2026-10-07T21:13:50.5921358Z",
+    "status": "degraded",
+    "latency_ms": null,
+    "reachable": false,
+    "response_code": null,
+    "failures": 2
+  },
+  {
+    "reported_state": "down",
+    "read_at": "2026-10-07T21:13:51.0980281Z",
+    "status": "down",
+    "latency_ms": null,
+    "reachable": false,
+    "response_code": null,
+    "failures": 3
+  },
+  {
+    "reported_state": "down",
+    "read_at": "2026-10-07T21:13:51.6157588Z",
+    "status": "down",
+    "latency_ms": null,
+    "reachable": false,
+    "response_code": null,
+    "failures": 3
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:52.1219779Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:52.8729570Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:53.3807291Z",
+    "status": "up",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  },
+  {
+    "reported_state": "up",
+    "read_at": "2026-10-07T21:13:53.8928227Z",
+    "status": "stale",
+    "latency_ms": 21,
+    "reachable": true,
+    "response_code": 200,
+    "failures": 0
+  }
+]

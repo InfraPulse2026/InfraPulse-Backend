@@ -1,0 +1,7 @@
+{
+  "placements": [
+    {"asset_id": "REPLACE_ASSET_ID_1", "mode": "rack", "location_id": "REPLACE_RACK_ID", "start_unit": 10, "height_units": 2, "expected_revision": 0},
+    {"asset_id": "REPLACE_ASSET_ID_2", "mode": "outside_rack", "location_id": "REPLACE_ROOM_ID", "position": "Стол 2", "expected_revision": 0}
+  ],
+  "reason": "Размещение сверено с маркировкой оборудования"
+}

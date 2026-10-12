@@ -1,0 +1,130 @@
+[
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:14:59.3852170Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:14:59.9236589Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:00.4441786Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:00.9732583Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "event_offline",
+    "At": "2026-10-07T18:15:01.4918049Z",
+    "Online": false,
+    "State": "offline",
+    "Reported": false,
+    "Reason": "device_reported_offline"
+  },
+  {
+    "Kind": "event_offline",
+    "At": "2026-10-07T18:15:02.0165886Z",
+    "Online": false,
+    "State": "offline",
+    "Reported": false,
+    "Reason": "device_reported_offline"
+  },
+  {
+    "Kind": "inventory",
+    "At": "2026-10-07T18:15:02.5278343Z",
+    "Online": false,
+    "State": "offline",
+    "Reported": false,
+    "Reason": "device_reported_offline"
+  },
+  {
+    "Kind": "inventory",
+    "At": "2026-10-07T18:15:03.0500585Z",
+    "Online": false,
+    "State": "offline",
+    "Reported": false,
+    "Reason": "device_reported_offline"
+  },
+  {
+    "Kind": "inventory",
+    "At": "2026-10-07T18:15:03.5741683Z",
+    "Online": false,
+    "State": "offline",
+    "Reported": false,
+    "Reason": "device_reported_offline"
+  },
+  {
+    "Kind": "inventory",
+    "At": "2026-10-07T18:15:04.0893556Z",
+    "Online": false,
+    "State": "offline",
+    "Reported": false,
+    "Reason": "device_reported_offline"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:04.6039637Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:05.2489609Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:05.7609243Z",
+    "Online": true,
+    "State": "online",
+    "Reported": true,
+    "Reason": "device_reported_online"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:06.2772386Z",
+    "Online": false,
+    "State": "stale",
+    "Reported": true,
+    "Reason": "agent_disconnected"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:06.7896229Z",
+    "Online": false,
+    "State": "stale",
+    "Reported": true,
+    "Reason": "agent_disconnected"
+  },
+  {
+    "Kind": "telemetry",
+    "At": "2026-10-07T18:15:07.3176168Z",
+    "Online": false,
+    "State": "stale",
+    "Reported": true,
+    "Reason": "agent_disconnected"
+  }
+]

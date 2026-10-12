@@ -195,7 +195,7 @@ func TestReliableBackendProcess(t *testing.T) {
 	g := grpc.NewServer()
 	pb.RegisterAgentServiceServer(g, f)
 	go func() { _ = g.Serve(lis) }()
-	t.Fatal(http.ListenAndServe(os.Getenv("INFRAPULSE_E2E_HTTP"), api.New(s, log)))
+	t.Fatal(http.ListenAndServe(os.Getenv("INFRAPULSE_E2E_HTTP"), api.New(s, log, api.WithDevelopmentAuthDisabled())))
 }
 
 type fixture struct {

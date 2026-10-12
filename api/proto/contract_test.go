@@ -24,9 +24,23 @@ import (
 //go:embed testdata/p2-descriptor.pb
 var p2Descriptor []byte
 
+// Frozen Stage9F contract, before Collector v2 hardware/syslog integration.
+//
+//go:embed testdata/stage9f-descriptor.pb
+var stage9fDescriptor []byte
+
+func TestV2PreservesStage9FWireContract(t *testing.T) {
+	assertBaselineContract(t, stage9fDescriptor)
+}
+
 func TestP3PreservesP2WireContract(t *testing.T) {
+	assertBaselineContract(t, p2Descriptor)
+}
+
+func assertBaselineContract(t *testing.T, frozen []byte) {
+	t.Helper()
 	var baseline descriptorpb.FileDescriptorSet
-	if err := proto.Unmarshal(p2Descriptor, &baseline); err != nil {
+	if err := proto.Unmarshal(frozen, &baseline); err != nil {
 		t.Fatal(err)
 	}
 	if len(baseline.File) != 1 {
