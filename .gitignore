@@ -12,4 +12,6 @@ __pycache__/
 *.pyc
 *.key
 *.pem
+.cache/
+.tools/
 AGENTS.md

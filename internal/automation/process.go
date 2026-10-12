@@ -137,6 +137,12 @@ func (p Process) Execute(ctx context.Context, j Job) Result {
 	if j.Target.Validate() != nil {
 		return Result{ErrorCode: "invalid_result"}
 	}
+	if j.Restore != nil && (j.Restore.Validate() != nil || j.Target.TemplateID != "cisco_ios_read_config_v1" || j.TemplateID != RestoreTemplateID) {
+		return Result{ErrorCode: "invalid_result"}
+	}
+	if j.Restore == nil && j.TemplateID == RestoreTemplateID {
+		return Result{ErrorCode: "invalid_result"}
+	}
 	addr, err := netip.ParseAddr(j.Target.Host)
 	if err != nil {
 		return Result{ErrorCode: "destination_denied"}
@@ -155,6 +161,9 @@ func (p Process) Execute(ctx context.Context, j Job) Result {
 		return Result{ErrorCode: "credential_unavailable"}
 	}
 	in := map[string]any{"target": j.Target, "credential": cred, "timeout_seconds": j.TimeoutSeconds}
+	if j.Restore != nil {
+		in["restore"] = j.Restore
+	}
 	raw, err := p.invoke(ctx, in, (MaxConfiguration+MaxFacts)*6+4096)
 	if err != nil {
 		return Result{ErrorCode: "runner_failed"}
@@ -162,6 +171,9 @@ func (p Process) Execute(ctx context.Context, j Job) Result {
 	defer clear(raw)
 	var result Result
 	if json.Unmarshal(raw, &result) != nil {
+		return Result{ErrorCode: "invalid_result"}
+	}
+	if j.Restore != nil && result.ErrorCode == "" && (result.Configuration != "" || string(result.Facts) != "{}") {
 		return Result{ErrorCode: "invalid_result"}
 	}
 	return result

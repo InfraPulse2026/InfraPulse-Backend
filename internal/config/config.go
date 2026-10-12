@@ -9,6 +9,7 @@ import (
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/health"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/monitoring"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/pki"
+	rm "github.com/InfraPulse2026/InfraPulse-Backend/internal/remediation"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/telephony"
 	"net"
 	"net/url"
@@ -19,6 +20,7 @@ import (
 )
 
 type Config struct {
+	Remediation              rm.Policy
 	ConfigurationDriftMaxAge time.Duration
 	AutomationEnabled        bool
 	AutomationVault          *datasources.Vault
@@ -136,25 +138,9 @@ func Load() (Config, error) {
 			return c, fmt.Errorf("insecure cookies on wildcard listeners require an explicit loopback public origin for local containers")
 		}
 	}
-	c.Commands = commands.Defaults()
-	for key, dest := range map[string]*bool{"COMMANDS_ENABLED": &c.Commands.Enabled, "COMMAND_ALLOW_DISABLE": &c.Commands.AllowDisable, "COMMAND_ALLOW_ROLLBACK": &c.Commands.AllowRollback} {
-		if value := os.Getenv(key); value != "" {
-			*dest, err = strconv.ParseBool(value)
-			if err != nil {
-				return c, fmt.Errorf("%s must be true or false", key)
-			}
-		}
-	}
-	for key, dest := range map[string]*[]string{"COMMAND_PROTECTED_DEVICES": &c.Commands.ProtectedDevices, "COMMAND_PROTECTED_INTERFACES": &c.Commands.ProtectedInterfaces} {
-		if value := os.Getenv(key); value != "" {
-			for _, part := range strings.Split(value, ",") {
-				part = strings.TrimSpace(part)
-				if part == "" || len(part) > 128 {
-					return c, fmt.Errorf("invalid %s", key)
-				}
-				*dest = append(*dest, part)
-			}
-		}
+	c.Commands, err = LoadCommandPolicy()
+	if err != nil {
+		return c, err
 	}
 	c.PKI.Enabled, err = strconv.ParseBool(env("PKI_ENABLED", "false"))
 	if err != nil {
@@ -231,6 +217,13 @@ func Load() (Config, error) {
 	c.ConfigurationDriftMaxAge, err = time.ParseDuration(env("CONFIGURATION_DRIFT_MAX_AGE", "15m"))
 	if err != nil || c.ConfigurationDriftMaxAge < time.Minute || c.ConfigurationDriftMaxAge > 24*time.Hour {
 		return c, fmt.Errorf("CONFIGURATION_DRIFT_MAX_AGE must be 1m..24h")
+	}
+	c.Remediation, err = LoadRemediationPolicy()
+	if err != nil {
+		return c, err
+	}
+	if c.Remediation.Enabled && (!c.AutomationEnabled || c.Access.Mode != "required") {
+		return c, fmt.Errorf("remediation requires enabled automation and REST authentication")
 	}
 	return c, nil
 }

@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "InfraPulse Backend MVP",
-    "version": "0.32.0",
-    "description": "InfraPulse Backend v2 through B10 backend implementation. Existing device, topology, log, SIP, command, rollback, PKI, incident, report and AI routes preserved. Collector canonical contract 215d33a and frozen legacy protocols are compatible; ACK follows atomic PostgreSQL commit. Source instances support protected HTTPS connectors for selected Zabbix 7.x inventory/metrics/problems and Prometheus 3.x targets/scoped on-demand queries; credentials are encrypted and private. Assets preserve source bindings, reviewed merge/split, optional conservative resolution, inventory provenance/conflicts and reviewed multi-U physical placement. Global topology folds directed LLDP/CDP/MNDP evidence through existing Asset mappings, retains unknowns, checks reciprocal typed ports and TTL, and keeps BMC management relations separate. Discovery lifecycle history is durable; current Asset mapping is not an historical reconstruction. Source/Asset writes require admin and live role checks; all new topology routes require data.read. B9 negotiates managed Collector configuration only with explicit backend enablement, verified mTLS, live REST admin and Collector local opt-in. Immutable full snapshots, fixed canonical digest, monotonic revisions, durable delivery/events and runtime-confirmed applied state are available. Secrets remain local credential/CA references; local YAML targets are preserved. Last applied source-owned polling intervals inform freshness; manual overrides remain explicit. B10 adds a separate Linux Ansible worker, a closed read-only template registry, explicit reviewed Asset-to-SSH bindings, durable idempotent jobs, exclusive claims, cancellation, expiry, safe events and encrypted config/facts snapshots. Real device acceptance requires an available Linux Ansible runtime and explicitly selected SSH device; Windows fixture tests do not establish that acceptance. Global incident correlation/AI provider acceptance/TSDB/HA remain later stages. Fixture verification does not establish physical hardware or production deployment acceptance. B8 adds Asset hardware latest/history with verified BMC context and source freshness, safe Asset logs/audit with source/session isolation and live-admin audited raw access, and explicit reviewed SIP associations with endpoint history, physical placement and incident context. Real SIP may be linked to inventory from another source by an administrator. Ordinary legacy log reads now mask raw fields; route names and permissions are preserved. B11.1 adds immutable administrator-approved same-Asset snapshot baselines, versioned conservative normalization, automatic redacted drift results, freshness/target/Asset guards, history and related reviewed VoIP context without claiming proven port impact. A VLAN restoration recommendation is non-executable: approval/policy/action/recollection workflow B11.2 is not implemented. Configuration secrets remain encrypted in B10 snapshots."
+    "version": "0.33.0",
+    "description": "InfraPulse Backend v2 through B10 backend implementation. Existing device, topology, log, SIP, command, rollback, PKI, incident, report and AI routes preserved. Collector canonical contract 215d33a and frozen legacy protocols are compatible; ACK follows atomic PostgreSQL commit. Source instances support protected HTTPS connectors for selected Zabbix 7.x inventory/metrics/problems and Prometheus 3.x targets/scoped on-demand queries; credentials are encrypted and private. Assets preserve source bindings, reviewed merge/split, optional conservative resolution, inventory provenance/conflicts and reviewed multi-U physical placement. Global topology folds directed LLDP/CDP/MNDP evidence through existing Asset mappings, retains unknowns, checks reciprocal typed ports and TTL, and keeps BMC management relations separate. Discovery lifecycle history is durable; current Asset mapping is not an historical reconstruction. Source/Asset writes require admin and live role checks; all new topology routes require data.read. B9 negotiates managed Collector configuration only with explicit backend enablement, verified mTLS, live REST admin and Collector local opt-in. Immutable full snapshots, fixed canonical digest, monotonic revisions, durable delivery/events and runtime-confirmed applied state are available. Secrets remain local credential/CA references; local YAML targets are preserved. Last applied source-owned polling intervals inform freshness; manual overrides remain explicit. B10 adds a separate Linux Ansible worker, a closed read-only template registry, explicit reviewed Asset-to-SSH bindings, durable idempotent jobs, exclusive claims, cancellation, expiry, safe events and encrypted config/facts snapshots. Real device acceptance requires an available Linux Ansible runtime and explicitly selected SSH device; Windows fixture tests do not establish that acceptance. Global incident correlation/AI provider acceptance/TSDB/HA remain later stages. Fixture verification does not establish physical hardware or production deployment acceptance. B8 adds Asset hardware latest/history with verified BMC context and source freshness, safe Asset logs/audit with source/session isolation and live-admin audited raw access, and explicit reviewed SIP associations with endpoint history, physical placement and incident context. Real SIP may be linked to inventory from another source by an administrator. Ordinary legacy log reads now mask raw fields; route names and permissions are preserved. B11.1 adds immutable administrator-approved same-Asset snapshot baselines, versioned conservative normalization, automatic redacted drift results, freshness/target/Asset guards, history and related reviewed VoIP context without claiming proven port impact. B11.2 adds an explicit expiring one-time human approval for an immutable Cisco IOS access VLAN restoration action, exact action fingerprints, local per-user/Asset/source-binding/physical-port/VLAN policy, fresh read-only preflight, the existing asynchronous Ansible job engine and post-execution read-back with the B11.1 comparator. Default policy denies changes. Unknown execution outcomes never trigger blind retries; successful write exit codes are insufficient for verified success. Remediation schema needs migration-number coordination before enablement; fixture acceptance does not establish real SSH-device acceptance. Configuration secrets remain encrypted in B10 snapshots."
   },
   "servers": [
     {
@@ -16743,6 +16743,771 @@
           }
         }
       }
+    },
+    "/api/assets/{id}/configuration/remediations": {
+      "post": {
+        "operationId": "createRemediation",
+        "summary": "Create a concrete immutable proposal from a recorded drift",
+        "description": "Operator/admin plus explicit local per-user policy. Server derives all action parameters from existing drift/baseline/snapshots and validated Asset/source/interface identity. Creating or viewing this proposal does not approve or execute a write. One bounded Cisco IOS physical access VLAN change only; no arbitrary playbook, command, host expression or extra_vars.",
+        "tags": [
+          "Configuration Remediation B11.2"
+        ],
+        "x-required-permission": "commands.write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required only for cookie authentication; use the session-bound token from login or GET /api/auth/me."
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "description": "Actor-scoped stable key. Reuse only for the identical Asset/drift/reason request."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON, unknown fields, repeated query parameters or malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, live session, CSRF, Origin or explicit remediation policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset, drift, baseline or proposal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Expired/stale action, changed state or approval/idempotency/concurrent execution conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid concrete action, confirmation, digest or reviewed reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Remediation disabled, uncoordinated schema, worker, encryption or storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Persisted concrete proposal; approval queues asynchronous execution and does not imply verified success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationProposal"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "GET proposal preview/status/evidence URL."
+              },
+              "Idempotent-Replay": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                },
+                "description": "Present when the original proposal/job is returned without another execution."
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemediationCreateInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/remediations/{id}": {
+      "get": {
+        "operationId": "remediation",
+        "summary": "Read concrete action preview, asynchronous status and verification evidence",
+        "description": "Authenticated viewer/operator/admin. Contains safe action metadata and before/expected/after snapshot references, never secret-bearing configuration. Full snapshot contents retain existing admin-only audited B10 routes. Use the saved digest for explicit approval.",
+        "tags": [
+          "Configuration Remediation B11.2"
+        ],
+        "x-required-permission": "data.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON, unknown fields, repeated query parameters or malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, live session, CSRF, Origin or explicit remediation policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset, drift, baseline or proposal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Expired/stale action, changed state or approval/idempotency/concurrent execution conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid concrete action, confirmation, digest or reviewed reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Remediation disabled, uncoordinated schema, worker, encryption or storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted concrete proposal; approval queues asynchronous execution and does not imply verified success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationProposal"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/remediations/{id}/approve": {
+      "post": {
+        "operationId": "approveRemediation",
+        "summary": "Explicitly approve the exact stored action and queue one asynchronous job",
+        "description": "Operator/admin also requires explicit local remediation capability. confirmed=true and digest must match the immutable stored proposal. Approval is one-time, scoped and expiring; optional configured separation of creator/approver applies. A repeated same-user same-digest approval returns the existing job, never launches another write. Fresh device gather and role/policy/source/expected-state/template checks occur before mutation. HTTP 202 does not mean configuration was changed.",
+        "tags": [
+          "Configuration Remediation B11.2"
+        ],
+        "x-required-permission": "commands.write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required only for cookie authentication; use the session-bound token from login or GET /api/auth/me."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON, unknown fields, repeated query parameters or malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, live session, CSRF, Origin or explicit remediation policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset, drift, baseline or proposal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Expired/stale action, changed state or approval/idempotency/concurrent execution conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid concrete action, confirmation, digest or reviewed reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Remediation disabled, uncoordinated schema, worker, encryption or storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Persisted concrete proposal; approval queues asynchronous execution and does not imply verified success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationProposal"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "GET proposal preview/status/evidence URL."
+              },
+              "Idempotent-Replay": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true"
+                  ]
+                },
+                "description": "Present when the original proposal/job is returned without another execution."
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemediationApproveInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/remediations/{id}/reject": {
+      "post": {
+        "operationId": "rejectRemediation",
+        "summary": "Reject an unexecuted proposal",
+        "description": "Explicit rejection recorded in existing audit. Does not authorize or execute Ansible. Started or uncertain actions cannot be made safe through rejection; inspect status and verification evidence.",
+        "tags": [
+          "Configuration Remediation B11.2"
+        ],
+        "x-required-permission": "commands.write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required only for cookie authentication; use the session-bound token from login or GET /api/auth/me."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON, unknown fields, repeated query parameters or malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, live session, CSRF, Origin or explicit remediation policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset, drift, baseline or proposal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Expired/stale action, changed state or approval/idempotency/concurrent execution conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid concrete action, confirmation, digest or reviewed reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Remediation disabled, uncoordinated schema, worker, encryption or storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted concrete proposal; approval queues asynchronous execution and does not imply verified success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationProposal"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemediationRejectInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/remediations/{id}/history": {
+      "get": {
+        "operationId": "remediationHistory",
+        "summary": "Read the bounded persisted remediation audit history",
+        "description": "Authenticated viewer/operator/admin. Returns safe code-only audit events with actor, proposal/resource identity, request identity and timestamp; no credentials, tokens or raw configuration.",
+        "tags": [
+          "Configuration Remediation B11.2"
+        ],
+        "x-required-permission": "data.read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON, unknown fields, repeated query parameters or malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, live session, CSRF, Origin or explicit remediation policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset, drift, baseline or proposal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Expired/stale action, changed state or approval/idempotency/concurrent execution conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid concrete action, confirmation, digest or reviewed reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Remediation disabled, uncoordinated schema, worker, encryption or storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Persisted concrete proposal; approval queues asynchronous execution and does not imply verified success.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationHistoryPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/remediations/{id}/reconcile": {
+      "post": {
+        "operationId": "reconcileRemediation",
+        "summary": "Record fresh read-only evidence for an unknown execution outcome",
+        "description": "Operator/admin only with live permission and cookie CSRF. Supply an existing successful same-Asset B10 snapshot collected after the old write deadline plus 35-second stop grace; current target/source identity and approved baseline are revalidated. Uses the B11.1 comparator and saves verification evidence. The original AutomationJob remains unknown. Proposal becomes reconciled, never succeeded: the old write outcome is still uncertain. This endpoint performs no write and never reruns the old action. If drift remains, a new proposal and new human approval are required.",
+        "tags": [
+          "Configuration Remediation B11.2"
+        ],
+        "x-required-permission": "commands.write",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+            }
+          },
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required only for cookie authentication; use the session-bound token from login or GET /api/auth/me."
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "Invalid JSON, unknown fields, repeated query parameters or malformed query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role, live session, CSRF, Origin or explicit remediation policy denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset, drift, baseline or proposal not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Expired/stale action, changed state or approval/idempotency/concurrent execution conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid concrete action, confirmation, digest or reviewed reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Remediation disabled, uncoordinated schema, worker, encryption or storage unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Read-only evidence stored; proposal reconciled, original execution remains unknown. No Ansible write is queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemediationProposal"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemediationReconcileInput"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -25606,8 +26371,7 @@
               true
             ]
           }
-        },
-        "required": []
+        }
       },
       "AutomationTargetInput": {
         "type": "object",
@@ -25731,8 +26495,7 @@
             "type": "string",
             "format": "date-time"
           }
-        },
-        "required": []
+        }
       },
       "AutomationJobInput": {
         "type": "object",
@@ -25788,7 +26551,12 @@
               "succeeded",
               "failed",
               "cancelled",
-              "timed_out"
+              "timed_out",
+              "verifying",
+              "verification_failed",
+              "unknown",
+              "stale",
+              "no_action"
             ]
           },
           "error_code": {
@@ -25816,9 +26584,17 @@
           },
           "snapshot_id": {
             "type": "string"
+          },
+          "proposal_id": {
+            "type": "string",
+            "description": "Optional B11.2 immutable proposal reference. Absent on existing B10 read-only jobs."
+          },
+          "action_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "Optional B11.2 exact approved action digest."
           }
-        },
-        "required": []
+        }
       },
       "AutomationEvent": {
         "type": "object",
@@ -25838,8 +26614,7 @@
             "type": "string",
             "format": "date-time"
           }
-        },
-        "required": []
+        }
       },
       "AutomationSnapshot": {
         "type": "object",
@@ -25867,8 +26642,7 @@
             "type": "string",
             "format": "date-time"
           }
-        },
-        "required": []
+        }
       },
       "AutomationSnapshotContent": {
         "type": "object",
@@ -25917,8 +26691,7 @@
           "error_code": {
             "type": "string"
           }
-        },
-        "required": []
+        }
       },
       "AutomationJobPage": {
         "type": "object",
@@ -25936,8 +26709,7 @@
           "offset": {
             "type": "integer"
           }
-        },
-        "required": []
+        }
       },
       "AutomationEventPage": {
         "type": "object",
@@ -25955,8 +26727,7 @@
           "offset": {
             "type": "integer"
           }
-        },
-        "required": []
+        }
       },
       "AutomationSnapshotPage": {
         "type": "object",
@@ -25974,8 +26745,7 @@
           "offset": {
             "type": "integer"
           }
-        },
-        "required": []
+        }
       },
       "AutomationTemplateList": {
         "type": "object",
@@ -25987,8 +26757,7 @@
               "$ref": "#/components/schemas/AutomationTemplate"
             }
           }
-        },
-        "required": []
+        }
       },
       "AutomationWorkerList": {
         "type": "object",
@@ -26000,8 +26769,7 @@
               "$ref": "#/components/schemas/AutomationWorker"
             }
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationBaselineInput": {
         "type": "object",
@@ -26080,8 +26848,7 @@
             "type": "string",
             "format": "date-time"
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationChange": {
         "type": "object",
@@ -26115,8 +26882,7 @@
           "redacted": {
             "type": "boolean"
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationProposal": {
         "type": "object",
@@ -26152,8 +26918,7 @@
           "limitation": {
             "type": "string"
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationComparison": {
         "type": "object",
@@ -26199,8 +26964,7 @@
             ],
             "nullable": true
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationRelatedService": {
         "type": "object",
@@ -26218,8 +26982,7 @@
               "reviewed_asset_association_not_proven_port_impact"
             ]
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationDriftRecord": {
         "type": "object",
@@ -26301,8 +27064,7 @@
             },
             "maxItems": 50
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationDriftState": {
         "type": "object",
@@ -26346,8 +27108,7 @@
             ],
             "nullable": true
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationCompareInput": {
         "type": "object",
@@ -26389,8 +27150,7 @@
           "offset": {
             "type": "integer"
           }
-        },
-        "required": []
+        }
       },
       "ConfigurationDriftRecordPage": {
         "type": "object",
@@ -26408,8 +27168,477 @@
           "offset": {
             "type": "integer"
           }
+        }
+      },
+      "RemediationCreateInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "drift_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512,
+            "description": "Reviewed human reason. Do not include secrets. CR, LF and NUL are forbidden."
+          }
         },
-        "required": []
+        "required": [
+          "drift_id",
+          "reason"
+        ]
+      },
+      "RemediationApproveInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirmed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512,
+            "description": "Reviewed human reason. Do not include secrets. CR, LF and NUL are forbidden."
+          }
+        },
+        "required": [
+          "confirmed",
+          "digest",
+          "reason"
+        ]
+      },
+      "RemediationRejectInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512,
+            "description": "Reviewed human reason. Do not include secrets. CR, LF and NUL are forbidden."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "RemediationAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "action_type": {
+            "type": "string",
+            "enum": [
+              "restore_access_vlan"
+            ]
+          },
+          "asset_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "asset_revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "binding_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "binding_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "target_revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "target_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "interface_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "interface": {
+            "type": "string",
+            "description": "Canonical physical Cisco IOS access interface resolved from the selected Asset source inventory; abbreviated aliases are not execution parameters."
+          },
+          "drift_id": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "baseline_revision": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "expected_snapshot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "actual_snapshot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "expected_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "observed_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "current_vlan": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          },
+          "target_vlan": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4094
+          },
+          "template_id": {
+            "type": "string",
+            "enum": [
+              "cisco_ios_restore_access_vlan_v1"
+            ]
+          },
+          "template_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "policy_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        },
+        "required": [
+          "action_type",
+          "asset_id",
+          "asset_revision",
+          "binding_id",
+          "binding_digest",
+          "target_revision",
+          "target_digest",
+          "interface_id",
+          "interface",
+          "drift_id",
+          "baseline_revision",
+          "expected_snapshot_id",
+          "actual_snapshot_id",
+          "expected_digest",
+          "observed_digest",
+          "current_vlan",
+          "target_vlan",
+          "template_id",
+          "template_digest",
+          "policy_digest"
+        ],
+        "description": "Server-created immutable concrete action. Digests bind target host, source identity, expected/actual state, pinned template and local policy without exposing credentials. Approval accepts this stored action only; no client action parameters are allowed."
+      },
+      "RemediationComparison": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "compliant",
+              "drift"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "expected_normalized_sha256": {
+            "type": "string"
+          },
+          "actual_normalized_sha256": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConfigurationChange"
+            },
+            "maxItems": 200
+          },
+          "total_changes": {
+            "type": "integer",
+            "description": "Changed contexts (global/interface), not count of raw diff lines."
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "proposal": {
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigurationProposal"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "status",
+          "error_code",
+          "expected_normalized_sha256",
+          "actual_normalized_sha256",
+          "changes",
+          "total_changes",
+          "truncated",
+          "proposal"
+        ]
+      },
+      "RemediationVerification": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "comparison": {
+            "$ref": "#/components/schemas/RemediationComparison"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "drift_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "status",
+          "comparison",
+          "verified_at",
+          "drift_id"
+        ]
+      },
+      "RemediationProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "action": {
+            "$ref": "#/components/schemas/RemediationAction"
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "approved",
+              "queued",
+              "running",
+              "verifying",
+              "succeeded",
+              "failed",
+              "verification_failed",
+              "unknown",
+              "stale",
+              "no_action",
+              "rejected",
+              "expired",
+              "cancelled",
+              "reconciled"
+            ]
+          },
+          "asset_name": {
+            "type": "string"
+          },
+          "actual_observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expected_observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Safe operational limitations for the action preview. Display before approval. No absolute device transaction atomicity is claimed."
+          },
+          "created_by": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approved_by": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "approved_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "job_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "before_snapshot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "after_snapshot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/RemediationVerification"
+          },
+          "error_code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "digest",
+          "state",
+          "asset_name",
+          "actual_observed_at",
+          "expected_observed_at",
+          "warnings",
+          "created_by",
+          "created_at",
+          "expires_at"
+        ],
+        "description": "Concrete safe preview and persisted status. proposed is not authorization. HTTP 202 and queued/running/verifying are not success. succeeded requires a separate successful actual-configuration read-back and comparator verification. unknown means execution outcome is uncertain and must not be retried under the old approval. References expose no raw configuration. Approval TTL 5 minutes, queue TTL 1 minute, execution deadline 120 seconds, each gather deadline 30 seconds; max pending proposals 100, max outstanding automation jobs 100, max concurrent remediation writes 4, at most one active or uncertain remediation per Asset. Read-only manual reconciliation using a later B10 snapshot may record current actual state and set reconciled; it preserves the original job unknown result. A new write requires a fresh proposal and approval."
+      },
+      "RemediationHistoryEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "actor_id",
+          "action",
+          "outcome",
+          "resource",
+          "request_id",
+          "at"
+        ]
+      },
+      "RemediationHistoryPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RemediationHistoryEvent"
+            },
+            "maxItems": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000
+          }
+        },
+        "required": [
+          "items",
+          "limit",
+          "offset"
+        ]
+      },
+      "RemediationReconcileInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 512,
+            "description": "Reviewed human reason. Do not include secrets. CR, LF and NUL are forbidden."
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "confirmed",
+          "reason"
+        ],
+        "description": "Explicit read-only reconciliation of an unknown outcome against a separately collected successful B10 snapshot after the old execution deadline and bounded process-stop grace. No write, automatic retry or inferred execution success."
       }
     },
     "securitySchemes": {

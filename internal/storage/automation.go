@@ -195,7 +195,7 @@ func (s *Store) CreateAutomation(ctx context.Context, assetID string, in au.Inpu
 		return out, false, err
 	}
 	var outstanding int
-	if err = tx.QueryRow(ctx, `SELECT count(*) FROM automation_jobs WHERE state IN ('queued','running')`).Scan(&outstanding); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT count(*) FROM automation_jobs WHERE state IN ('queued','running','verifying')`).Scan(&outstanding); err != nil {
 		return out, false, err
 	}
 	if outstanding >= 100 {
@@ -223,7 +223,7 @@ func (s *Store) CreateAutomation(ctx context.Context, assetID string, in au.Inpu
 		return out, false, au.ErrConflict
 	}
 	var busy bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM automation_jobs WHERE asset_id=$1 AND state IN ('queued','running'))`, assetID).Scan(&busy); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM automation_jobs WHERE asset_id=$1 AND state IN ('queued','running','verifying'))`, assetID).Scan(&busy); err != nil {
 		return out, false, err
 	}
 	if busy {
@@ -254,7 +254,14 @@ func (s *Store) CreateAutomation(ctx context.Context, assetID string, in au.Inpu
 	return out, false, tx.Commit(ctx)
 }
 func (s *Store) AutomationJob(ctx context.Context, id string) (au.Job, error) {
-	return readAutomationJob(s.pool.QueryRow(ctx, `SELECT `+automationJobColumns+` FROM automation_jobs WHERE id=$1`, id))
+	j, err := readAutomationJob(s.pool.QueryRow(ctx, `SELECT `+automationJobColumns+` FROM automation_jobs WHERE id=$1`, id))
+	if err == nil && s.remediationReady {
+		e := s.pool.QueryRow(ctx, `SELECT id,digest FROM remediation_proposals WHERE job_id=$1`, id).Scan(&j.ProposalID, &j.ActionDigest)
+		if e != nil && !errors.Is(e, pgx.ErrNoRows) {
+			return j, e
+		}
+	}
+	return j, err
 }
 func (s *Store) AutomationJobs(ctx context.Context, asset string, limit, offset int) ([]au.Job, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+automationJobColumns+` FROM automation_jobs WHERE asset_id=$1 ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, asset, limit, offset)
@@ -312,12 +319,17 @@ func (s *Store) CancelAutomation(ctx context.Context, id string) (au.Job, error)
 	if role != "admin" && out.ActorID != p.User.ID {
 		return out, access.ErrForbidden
 	}
-	if out.State == "queued" || out.State == "running" {
+	if out.State == "queued" || out.State == "running" || out.State == "verifying" {
 		changed, e := tx.Exec(ctx, `UPDATE automation_jobs SET cancel_requested=true,state=CASE WHEN state='queued' THEN 'cancelled' ELSE state END,finished_at=CASE WHEN state='queued' THEN now() ELSE finished_at END WHERE id=$1 AND NOT cancel_requested`, id)
 		if e != nil {
 			return out, e
 		}
 		if changed.RowsAffected() > 0 {
+			if s.remediationReady && out.State == "queued" {
+				if _, err = tx.Exec(ctx, `UPDATE remediation_proposals SET state='cancelled',error_code='cancelled' WHERE job_id=$1 AND state='queued'`, id); err != nil {
+					return out, err
+				}
+			}
 			if err = automationEvent(ctx, tx, id, "cancel_requested"); err != nil {
 				return out, err
 			}
@@ -356,10 +368,16 @@ func (s *Store) AutomationWorkers(ctx context.Context) ([]au.WorkerStatus, error
 	return out, rows.Err()
 }
 func (s *Store) AutomationWorker(ctx context.Context, v au.WorkerStatus) error {
-	if !au.Identifier(v.ID) || len(v.Templates) > 3 || len(v.Versions) > 8 {
+	if !au.Identifier(v.ID) || len(v.Templates) > 4 || len(v.Versions) > 8 {
 		return au.ErrInvalid
 	}
 	for _, id := range v.Templates {
+		if id == au.RestoreTemplate().ID {
+			if v.Versions["restore_template_sha256"] != au.RestoreTemplateDigest() {
+				return au.ErrInvalid
+			}
+			continue
+		}
 		if _, ok := au.Lookup(id); !ok {
 			return au.ErrInvalid
 		}
@@ -373,7 +391,22 @@ func (s *Store) AutomationWorker(ctx context.Context, v au.WorkerStatus) error {
 	versions, _ := json.Marshal(v.Versions)
 	templates, _ := json.Marshal(v.Templates)
 	_, err := s.pool.Exec(ctx, `INSERT INTO automation_workers(id,available,versions,templates,error_code) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO UPDATE SET available=excluded.available,versions=excluded.versions,templates=excluded.templates,error_code=excluded.error_code,last_seen=now()`, v.ID, v.Available, versions, templates, safeAutomationError(v.ErrorCode))
-	return err
+	if err != nil || !s.remediationReady {
+		return err
+	}
+	// Heartbeats still sweep deadlines when the Runner is unavailable.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.Background())
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(73194007)`); err != nil {
+		return err
+	}
+	if err = s.recoverRemediationTx(ctx, tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 const automationRunValid = `SELECT EXISTS(SELECT 1 FROM automation_jobs j JOIN assets a ON a.id=j.asset_id JOIN automation_targets t ON t.asset_id=j.asset_id JOIN access_users u ON u.id=j.actor_id JOIN access_sessions ses ON ses.user_id=u.id AND ses.token_hash=j.session_hash WHERE j.id=$1 AND j.state='running' AND j.claim_token=$2 AND NOT j.cancel_requested AND j.deadline>now() AND t.revision=j.target_revision AND (t.definition->>'enabled')::boolean AND a.revision=(t.definition->>'asset_revision')::bigint AND a.lifecycle_status='observed' AND a.scope='' AND NOT u.disabled AND u.role IN ('admin','operator') AND ses.expires_at>now())`
@@ -388,6 +421,21 @@ func (s *Store) ClaimAutomation(ctx context.Context, worker string) (au.Job, err
 		return out, err
 	}
 	defer tx.Rollback(context.Background())
+	if s.remediationReady {
+		if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(73194007)`); err != nil {
+			return out, err
+		}
+		if err = s.recoverRemediationTx(ctx, tx); err != nil {
+			return out, err
+		}
+		var running int
+		if err = tx.QueryRow(ctx, `SELECT count(*) FROM automation_jobs WHERE state IN ('running','verifying')`).Scan(&running); err != nil {
+			return out, err
+		}
+		if running >= 4 {
+			return out, tx.Commit(ctx)
+		}
+	}
 	// An orphan is terminal; running jobs are never blindly replayed after a crash.
 	rows, err := tx.Query(ctx, `UPDATE automation_jobs SET state='failed',error_code='worker_lost',finished_at=now(),claim_token=NULL WHERE state='running' AND deadline<now()-interval '30 seconds' RETURNING id`)
 	if err != nil {
@@ -413,7 +461,11 @@ func (s *Store) ClaimAutomation(ctx context.Context, worker string) (au.Job, err
 		}
 	}
 	var raw []byte
-	out, err = readAutomationJob(tx.QueryRow(ctx, `SELECT `+automationJobColumns+` FROM automation_jobs WHERE state='queued' AND template_id IN (SELECT jsonb_array_elements_text(templates) FROM automation_workers WHERE id=$1 AND available AND last_seen>now()-interval '20 seconds') ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, worker))
+	eligible := `template_id IN (SELECT jsonb_array_elements_text(templates) FROM automation_workers WHERE id=$1 AND available AND last_seen>now()-interval '20 seconds')`
+	if s.remediationReady {
+		eligible += ` OR (template_id='cisco_ios_restore_access_vlan_v1' AND EXISTS(SELECT 1 FROM remediation_proposals p JOIN automation_workers w ON w.id=$1 WHERE p.job_id=automation_jobs.id AND w.available AND w.last_seen>now()-interval '20 seconds' AND w.templates ? 'cisco_ios_read_config_v1' AND w.versions->>'restore_template_sha256'=p.action->>'template_digest'))`
+	}
+	out, err = readAutomationJob(tx.QueryRow(ctx, `SELECT `+automationJobColumns+` FROM automation_jobs WHERE state='queued' AND (`+eligible+`) ORDER BY created_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, worker))
 	if errors.Is(err, ErrNotFound) {
 		return out, tx.Commit(ctx)
 	}
@@ -439,6 +491,14 @@ func (s *Store) ClaimAutomation(ctx context.Context, worker string) (au.Job, err
 		if err = automationEvent(ctx, tx, out.ID, "authorization_or_target_changed"); err != nil {
 			return out, err
 		}
+		if s.remediationReady {
+			if _, err = tx.Exec(ctx, `UPDATE remediation_proposals SET state='stale',error_code='approval_validation_failed' WHERE job_id=$1 AND state='queued'`, out.ID); err != nil {
+				return out, err
+			}
+			if err = automationAudit(ctx, tx, out.ActorID, "remediation.start.validation", "denied", out.ID, access.Meta{}); err != nil {
+				return out, err
+			}
+		}
 		return au.Job{}, tx.Commit(ctx)
 	}
 	if err = tx.QueryRow(ctx, `SELECT target FROM automation_jobs WHERE id=$1`, out.ID).Scan(&raw); err != nil {
@@ -446,6 +506,13 @@ func (s *Store) ClaimAutomation(ctx context.Context, worker string) (au.Job, err
 	}
 	if err = json.Unmarshal(raw, &out.Target); err != nil {
 		return out, err
+	}
+	allowed, err := s.claimRemediationTx(ctx, tx, &out, worker)
+	if err != nil {
+		return out, err
+	}
+	if !allowed {
+		return au.Job{}, tx.Commit(ctx)
 	}
 	out.State = "running"
 	if err = automationEvent(ctx, tx, out.ID, "running"); err != nil {
@@ -455,6 +522,22 @@ func (s *Store) ClaimAutomation(ctx context.Context, worker string) (au.Job, err
 }
 func (s *Store) AutomationRunning(ctx context.Context, j au.Job) (bool, error) {
 	var valid bool
+	if j.Restore != nil {
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return false, err
+		}
+		defer tx.Rollback(context.Background())
+		p, err := s.remediationJobTx(ctx, tx, j)
+		if err != nil {
+			return false, err
+		}
+		_, _, err = s.remediationRevalidateTx(ctx, tx, p, j.ActorID)
+		if err != nil {
+			return false, nil
+		}
+		return true, tx.Commit(ctx)
+	}
 	err := s.pool.QueryRow(ctx, automationRunValid, j.ID, j.ClaimToken).Scan(&valid)
 	return valid, err
 }
@@ -467,6 +550,15 @@ func safeAutomationError(code string) string {
 	}
 }
 func (s *Store) FinishAutomation(ctx context.Context, j au.Job, state string, result au.Result) error {
+	if s.remediationReady {
+		var isRemediation bool
+		if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM remediation_proposals WHERE job_id=$1)`, j.ID).Scan(&isRemediation); err != nil {
+			return err
+		}
+		if isRemediation {
+			return s.finishRemediation(ctx, j, state, result)
+		}
+	}
 	if state != "succeeded" && state != "failed" && state != "cancelled" && state != "timed_out" {
 		return au.ErrInvalid
 	}

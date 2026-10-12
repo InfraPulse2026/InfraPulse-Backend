@@ -76,29 +76,69 @@ func Run(ctx context.Context, repo Repository, exec Executor, workerID string, l
 	}
 }
 func executeJob(ctx context.Context, repo Repository, exec Executor, j Job) (string, Result) {
+	remediation := j.ProposalID != "" || j.Restore != nil
 	valid, err := repo.AutomationRunning(ctx, j)
 	if err != nil || !valid {
+		if remediation {
+			return "stale", Result{ErrorCode: "authorization_or_target_changed"}
+		}
 		return "failed", Result{ErrorCode: "authorization_or_target_changed"}
+	}
+	var remediationRepo RemediationRepository
+	if remediation {
+		var ok bool
+		remediationRepo, ok = repo.(RemediationRepository)
+		if !ok || j.ProposalID == "" || j.Restore == nil || j.Restore.Validate() != nil {
+			return "stale", Result{ErrorCode: "invalid_result"}
+		}
 	}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(j.TimeoutSeconds)*time.Second)
 	defer cancel()
-	done := make(chan Result, 1)
-	go func() { done <- exec.Execute(runCtx, j) }()
+	type outcome struct {
+		state  string
+		result Result
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		if remediation {
+			state, result := remediationRepo.ExecuteRemediation(runCtx, exec, j)
+			done <- outcome{state, result}
+			return
+		}
+		done <- outcome{result: exec.Execute(runCtx, j)}
+	}()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	state := ""
 	code := ""
 	for {
 		select {
-		case r := <-done:
+		case completed := <-done:
+			r := completed.result
 			if state != "" {
 				return state, Result{ErrorCode: code}
 			}
 			if runCtx.Err() != nil {
+				if remediation {
+					return "unknown", Result{ErrorCode: "execution_uncertain"}
+				}
 				if ctx.Err() != nil {
 					return "cancelled", Result{ErrorCode: "shutdown"}
 				}
 				return "timed_out", Result{ErrorCode: "timed_out"}
+			}
+			if remediation {
+				switch completed.state {
+				case "succeeded":
+					if r.Validate() != nil {
+						return "unknown", Result{ErrorCode: "invalid_result"}
+					}
+					return "succeeded", r
+				case "stale", "no_action", "verification_failed", "unknown", "failed", "cancelled", "expired":
+					return completed.state, r
+				default:
+					return "unknown", Result{ErrorCode: "invalid_result"}
+				}
 			}
 			if r.ErrorCode != "" {
 				if r.ErrorCode == "timed_out" {
@@ -118,11 +158,18 @@ func executeJob(ctx context.Context, repo Repository, exec Executor, j Job) (str
 			if err != nil || !valid {
 				state = "cancelled"
 				code = "cancelled"
+				if remediation {
+					state = "unknown"
+					code = "execution_uncertain"
+				}
 				cancel()
 			}
 		case <-runCtx.Done():
 			if state == "" {
-				if ctx.Err() != nil {
+				if remediation {
+					state = "unknown"
+					code = "execution_uncertain"
+				} else if ctx.Err() != nil {
 					state = "cancelled"
 					code = "shutdown"
 				} else {

@@ -16,6 +16,7 @@ import (
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/health"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/monitoring"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/prometheus"
+	rm "github.com/InfraPulse2026/InfraPulse-Backend/internal/remediation"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/telephony"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -128,6 +129,8 @@ var ErrAmbiguous = errors.New("device ID belongs to multiple agents")
 var ErrMessageConflict = errors.New("message ID reused with different contents")
 
 type Store struct {
+	remediationReady         bool
+	remediationPolicy        rm.Policy
 	configurationDriftMaxAge time.Duration
 	automationEnabled        bool
 	automationVault          *datasources.Vault

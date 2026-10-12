@@ -199,7 +199,7 @@ func TestOpenAPIIsAvailable(t *testing.T) {
 		}
 	}
 	checkReferences(document)
-	if spec.OpenAPI != "3.0.3" || spec.Info.Version != "0.32.0" || spec.Paths["/api/devices/{id}/telemetry"] == nil || spec.Paths["/api/topology"] == nil || spec.Paths["/api/devices/{id}/topology"] == nil || spec.Paths["/api/availability/summary"] == nil || spec.Paths["/api/devices/{id}/availability"] == nil || spec.Paths["/api/devices/{id}/availability/history"] == nil {
+	if spec.OpenAPI != "3.0.3" || spec.Info.Version != "0.33.0" || spec.Paths["/api/devices/{id}/telemetry"] == nil || spec.Paths["/api/topology"] == nil || spec.Paths["/api/devices/{id}/topology"] == nil || spec.Paths["/api/availability/summary"] == nil || spec.Paths["/api/devices/{id}/availability"] == nil || spec.Paths["/api/devices/{id}/availability/history"] == nil {
 		t.Fatal("incomplete OpenAPI contract")
 	}
 	for _, path := range []string{"/api/incidents", "/api/incidents/{id}", "/api/incidents/{id}/acknowledge", "/api/incidents/{id}/evidence", "/api/incidents/{id}/transitions", "/api/devices/{id}/health", "/api/health/rules"} {

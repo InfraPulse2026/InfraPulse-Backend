@@ -134,6 +134,9 @@ func run(ctx context.Context, log *slog.Logger) error {
 	if err = store.ConfigureConfigurationDrift(cfg.ConfigurationDriftMaxAge); err != nil {
 		return err
 	}
+	if err = store.ConfigureRemediation(startup, cfg.Remediation); err != nil {
+		return err
+	}
 	controllerOptions := []controller.Option{controller.WithManagedConfiguration(cfg.CollectorConfigEnabled)}
 	if pkiService != nil {
 		controllerOptions = append(controllerOptions, controller.WithAgentAuthorizer(pkiService.AuthorizePeer))
@@ -172,7 +175,7 @@ func run(ctx context.Context, log *slog.Logger) error {
 		return err
 	}
 	defer httpListener.Close()
-	apiOptions := []api.Option{api.WithAccess(access.New(store, cfg.Access)), api.WithCommands(store), api.WithIncidents(store), api.WithReports(store), api.WithAI(store, cfg.AI), api.WithDataSources(store), api.WithAssets(store), api.WithCollectorConfig(store), api.WithAutomation(store), api.WithConfigurationDrift(store)}
+	apiOptions := []api.Option{api.WithAccess(access.New(store, cfg.Access)), api.WithCommands(store), api.WithIncidents(store), api.WithReports(store), api.WithAI(store, cfg.AI), api.WithDataSources(store), api.WithAssets(store), api.WithCollectorConfig(store), api.WithAutomation(store), api.WithConfigurationDrift(store), api.WithRemediation(store)}
 	if pkiService != nil {
 		apiOptions = append(apiOptions, api.WithPKI(pkiService))
 	}

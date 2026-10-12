@@ -1,4 +1,4 @@
-// Package automation implements a closed, read-only Ansible job protocol.
+// Package automation implements a closed Ansible job protocol.
 package automation
 
 import (
@@ -110,9 +110,12 @@ type Job struct {
 	StartedAt      *time.Time `json:"started_at"`
 	FinishedAt     *time.Time `json:"finished_at"`
 	SnapshotID     string     `json:"snapshot_id"`
+	ProposalID     string     `json:"proposal_id,omitempty"`
+	ActionDigest   string     `json:"action_digest,omitempty"`
 	// Execution-only values must never appear in REST or logs.
-	Target     Target `json:"-"`
-	ClaimToken string `json:"-"`
+	Target     Target             `json:"-"`
+	ClaimToken string             `json:"-"`
+	Restore    *RestoreAccessVLAN `json:"-"`
 }
 type Event struct {
 	ID    int64     `json:"id"`
@@ -163,4 +166,11 @@ type Repository interface {
 type Executor interface {
 	Probe(context.Context) WorkerStatus
 	Execute(context.Context, Job) Result
+}
+
+// RemediationRepository owns fresh reads, policy/preflight checks, verification
+// and evidence persistence. It extends the existing queue rather than creating
+// another worker or execution engine.
+type RemediationRepository interface {
+	ExecuteRemediation(context.Context, Executor, Job) (string, Result)
 }

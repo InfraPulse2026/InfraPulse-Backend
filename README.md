@@ -31,6 +31,7 @@ Agent отвечает за сбор данных на хостах и сете�
 Добавлен [B9: управляемая конфигурация Collector без перезапуска](docs/backend-v2-b9-collector-configuration.md).
 Добавлена [реализация B10: Ansible Worker, read-only задания и зашифрованные снимки](docs/backend-v2-b10-ansible.md).
 Добавлен [B11.1: approved baseline, безопасное сравнение конфигураций и история drift](docs/backend-v2-b11-1-configuration-drift.md).
+Добавлен [B11.2: controlled access VLAN remediation](docs/remediation.md): immutable proposal, human approval, policy, fresh Ansible preflight и independent verification. [Контракт frontend](docs/remediation-api.md). Миграция требует согласования номера; real Linux/device приёмка остаётся открытой.
 Текущий backend: B0–B10 и диагностическая часть B11.1; дальше — B11.2 approval/policy/восстановление/verification, затем B12–B16. [Проверки B9](docs/backend-v2-b9-validation.md), [открытая Linux/device приёмка B10](docs/backend-v2-b10-validation.md), [проверки B11.1](docs/backend-v2-b11-1-validation.md).
 Базовая инфраструктура B2/B3 и коннектор B4 проверены на fixtures. Приёмка на настоящем Zabbix ещё нужна; команда пока не предоставила стенд.
 

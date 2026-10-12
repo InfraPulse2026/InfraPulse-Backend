@@ -1,0 +1,18 @@
+# Optional B11.2 overlay; use together with docker-compose.automation.yml only
+# after migration number coordination and explicit reviewed policy enablement.
+# The JSON policy defaults to disabled in .env.example; no device is authorized
+# merely by mounting it. Keep this local file alongside existing secure runtime
+# configuration. Both services must use exactly the same policy/protected lists.
+services:
+  backend:
+    environment:
+      REMEDIATION_POLICY_FILE: ${REMEDIATION_POLICY_FILE:-}
+    volumes:
+      - ./automation-secrets/remediation-policy.json:/run/remediation-policy.json:ro
+  automation-worker:
+    environment:
+      REMEDIATION_POLICY_FILE: ${REMEDIATION_POLICY_FILE:-}
+      COMMAND_PROTECTED_DEVICES: ${COMMAND_PROTECTED_DEVICES:-}
+      COMMAND_PROTECTED_INTERFACES: ${COMMAND_PROTECTED_INTERFACES:-}
+    volumes:
+      - ./automation-secrets/remediation-policy.json:/run/remediation-policy.json:ro

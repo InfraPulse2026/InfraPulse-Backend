@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/automation"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/config"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/datasources"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/monitoring"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/storage"
@@ -68,6 +69,18 @@ func run(ctx context.Context, log *slog.Logger) error {
 		return err
 	}
 	if err = store.ConfigureAutomation(startup, true, vault); err != nil {
+		return err
+	}
+	protected, err := config.LoadCommandPolicy()
+	if err != nil {
+		return err
+	}
+	store.ConfigureCommands(protected)
+	policy, err := config.LoadRemediationPolicy()
+	if err != nil {
+		return err
+	}
+	if err = store.ConfigureRemediation(startup, policy); err != nil {
 		return err
 	}
 	return automation.Run(ctx, store, executor, id, log)

@@ -43,6 +43,7 @@ type Repository interface {
 	UpdateTelephonyMonitoring(context.Context, string, string, int) error
 }
 type API struct {
+	remediation        RemediationRepository
 	configurationDrift ConfigurationDriftRepository
 	automation         AutomationRepository
 	collectorConfig    CollectorConfigRepository
@@ -190,6 +191,12 @@ func New(repo Repository, log *slog.Logger, options ...Option) http.Handler {
 	register("GET /api/assets/{id}/configuration/drift", access.DataRead, a.configurationDriftRoute)
 	register("GET /api/assets/{id}/configuration/drift/history", access.DataRead, a.configurationDriftRoute)
 	register("POST /api/assets/{id}/configuration/compare", access.MonitoringWrite, a.configurationDriftRoute)
+	register("POST /api/assets/{id}/configuration/remediations", access.CommandWrite, a.remediationRoute)
+	register("GET /api/remediations/{id}", access.DataRead, a.remediationRoute)
+	register("POST /api/remediations/{id}/approve", access.CommandWrite, a.remediationRoute)
+	register("POST /api/remediations/{id}/reject", access.CommandWrite, a.remediationRoute)
+	register("POST /api/remediations/{id}/reconcile", access.CommandWrite, a.remediationRoute)
+	register("GET /api/remediations/{id}/history", access.DataRead, a.remediationRoute)
 	register("GET /api/automation/workers", access.AccessManage, a.automationRoute)
 	register("GET /api/assets/{id}/automation-target", access.AccessManage, a.automationRoute)
 	register("PUT /api/assets/{id}/automation-target", access.AccessManage, a.automationRoute)
