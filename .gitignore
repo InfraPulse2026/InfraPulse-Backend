@@ -12,3 +12,4 @@ __pycache__/
 *.pyc
 *.key
 *.pem
+AGENTS.md
