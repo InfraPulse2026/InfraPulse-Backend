@@ -10,7 +10,13 @@ import (
 	"time"
 
 	pb "github.com/InfraPulse2026/InfraPulse-Backend/api/gen/infrapulse/v1"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/collectorcontract"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/commands"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/datasources"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/health"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/monitoring"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/prometheus"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/telephony"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -27,18 +33,168 @@ var monitoringSchema string
 //go:embed migrations/003_monitoring_24_hours.sql
 var dailyMonitoringSchema string
 
+//go:embed migrations/004_topology.sql
+var topologySchema string
+
+//go:embed migrations/005_availability.sql
+var availabilitySchema string
+
+//go:embed migrations/006_logbook.sql
+var logbookSchema string
+
+//go:embed migrations/007_telephony.sql
+var telephonySchema string
+
+//go:embed migrations/008_access.sql
+var accessSchema string
+
+//go:embed migrations/009_commands.sql
+var commandSchema string
+
+//go:embed migrations/010_snapshots_rollback.sql
+var rollbackSchema string
+
+//go:embed migrations/011_pki.sql
+var pkiSchema string
+
+//go:embed migrations/012_health_incidents.sql
+var healthSchema string
+
+//go:embed migrations/013_resource_health.sql
+var resourceHealthSchema string
+
+//go:embed migrations/014_flap_collectors.sql
+var flapCollectorSchema string
+
+//go:embed migrations/015_reports.sql
+var reportSchema string
+
+//go:embed migrations/016_ai_analysis.sql
+var aiSchema string
+
+//go:embed migrations/017_collector_metadata.sql
+var collectorMetadataSchema string
+
+//go:embed migrations/018_data_sources.sql
+var dataSourceSchema string
+
+//go:embed migrations/019_data_source_jobs.sql
+var dataSourceJobSchema string
+
+//go:embed migrations/020_asset_registry.sql
+var assetRegistrySchema string
+
+//go:embed migrations/021_asset_decisions.sql
+var assetDecisionSchema string
+
+//go:embed migrations/022_asset_resolution.sql
+var assetResolutionSchema string
+
+//go:embed migrations/023_asset_provider_state.sql
+var assetProviderSchema string
+
+//go:embed migrations/024_external_monitoring.sql
+var externalMonitoringSchema string
+
+//go:embed migrations/025_prometheus.sql
+var prometheusSchema string
+
+//go:embed migrations/026_inventory_locations.sql
+var physicalInventorySchema string
+
+//go:embed migrations/027_global_topology.sql
+var globalTopologySchema string
+
+//go:embed migrations/028_asset_hardware.sql
+var assetHardwareSchema string
+
+//go:embed migrations/029_asset_logs.sql
+var assetLogSchema string
+
+//go:embed migrations/030_asset_telephony.sql
+var assetVoIPSchema string
+
+//go:embed migrations/031_collector_configuration.sql
+var collectorConfigSchema string
+
+//go:embed migrations/032_automation.sql
+var automationSchema string
+
+//go:embed migrations/033_configuration_drift.sql
+var configurationDriftSchema string
+
+//go:embed migrations/034_configuration_remediation.sql
+var configurationRemediationSchema string
+
+//go:embed migrations/035_multisource_correlation.sql
+var correlationSchema string
+
+//go:embed migrations/036_prometheus_alerts.sql
+var prometheusAlertSchema string
+
+//go:embed migrations/037_alertmanager_recovery.sql
+var alertmanagerSchema string
+
+//go:embed migrations/038_hardware_incidents.sql
+var hardwareIncidentSchema string
+
+//go:embed migrations/039_log_incidents.sql
+var logIncidentSchema string
+
+//go:embed migrations/040_audit_incidents.sql
+var auditIncidentSchema string
+
+//go:embed migrations/041_configuration_incidents.sql
+var configurationIncidentSchema string
+
+//go:embed migrations/042_topology_incidents.sql
+var topologyIncidentSchema string
+
+//go:embed migrations/043_log_patterns.sql
+var logPatternSchema string
+
+//go:embed migrations/044_reports_v2.sql
+var reportV2Schema string
+
+//go:embed migrations/045_report_schedules.sql
+var reportScheduleSchema string
+
 var ErrNotFound = errors.New("not found")
 var ErrAmbiguous = errors.New("device ID belongs to multiple agents")
 var ErrMessageConflict = errors.New("message ID reused with different contents")
 
 type Store struct {
-	pool     *pgxpool.Pool
-	timeout  time.Duration
-	defaults monitoring.Policy
+	configurationDriftMaxAge time.Duration
+	automationEnabled        bool
+	automationVault          *datasources.Vault
+	collectorConfigEnabled   bool
+	prometheus               *prometheus.Connector
+	autoAssetResolution      bool
+	assetResolutionAge       time.Duration
+	sourceVault              *datasources.Vault
+	sourceOperations         *datasources.Registry
+	pool                     *pgxpool.Pool
+	timeout                  time.Duration
+	defaults                 monitoring.Policy
+	telephonyInterval        int
+	commandPolicy            commands.Policy
+	healthPolicy             health.Policy
+	healthClock              func() time.Time // unset in production; deterministic storage fixtures
+	collectorStartedAt       time.Time
 }
 
-func Open(ctx context.Context, url string, agentTimeout time.Duration, defaults monitoring.Policy) (*Store, error) {
+func Open(ctx context.Context, url string, agentTimeout time.Duration, defaults monitoring.Policy, sipInterval ...int) (*Store, error) {
 	if err := defaults.Validate(); err != nil {
+		return nil, err
+	}
+	interval := telephony.DefaultIntervalSeconds
+	if len(sipInterval) > 1 {
+		return nil, errors.New("at most one SIP interval is accepted")
+	}
+	if len(sipInterval) == 1 {
+		interval = sipInterval[0]
+	}
+	if err := telephony.ValidateInterval(interval); err != nil {
 		return nil, err
 	}
 	cfg, err := pgxpool.ParseConfig(url)
@@ -55,7 +211,7 @@ func Open(ctx context.Context, url string, agentTimeout time.Duration, defaults 
 		p.Close()
 		return nil, err
 	}
-	return &Store{pool: p, timeout: agentTimeout, defaults: defaults}, nil
+	return &Store{pool: p, timeout: agentTimeout, defaults: defaults, telephonyInterval: interval}, nil
 }
 
 func (s *Store) Close()                         { s.pool.Close() }
@@ -72,6 +228,15 @@ func (s *Store) Migrate(ctx context.Context) error {
 	}
 	if _, err = tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		return err
+	}
+	// Refuse to run an older binary against an unknown newer schema. Do not
+	// silently treat a future migration marker as a compatible database.
+	var unsupported bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version<1 OR version>45)`).Scan(&unsupported); err != nil {
+		return err
+	}
+	if unsupported {
+		return errors.New("database schema version is not supported by this backend")
 	}
 	var exists bool
 	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=1)`).Scan(&exists); err != nil {
@@ -107,17 +272,496 @@ func (s *Store) Migrate(ctx context.Context) error {
 			return err
 		}
 	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=4)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, topologySchema); err != nil {
+			return fmt.Errorf("migration 4: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(4)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=5)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, availabilitySchema); err != nil {
+			return fmt.Errorf("migration 5: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(5)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=6)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, logbookSchema); err != nil {
+			return fmt.Errorf("migration 6: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(6)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=7)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, telephonySchema); err != nil {
+			return fmt.Errorf("migration 7: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(7)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=8)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, accessSchema); err != nil {
+			return fmt.Errorf("migration 8: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(8)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=9)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, commandSchema); err != nil {
+			return fmt.Errorf("migration 9: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(9)`); err != nil {
+			return err
+		}
+	}
 	// This MVP runs one controller instance. Streams do not survive a restart.
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=10)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, rollbackSchema); err != nil {
+			return fmt.Errorf("migration 10: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(10)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=11)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, pkiSchema); err != nil {
+			return fmt.Errorf("migration 11: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(11)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=12)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, healthSchema); err != nil {
+			return fmt.Errorf("migration 12: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(12)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=13)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, resourceHealthSchema); err != nil {
+			return fmt.Errorf("migration 13: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(13)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=14)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, flapCollectorSchema); err != nil {
+			return fmt.Errorf("migration 14: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(14)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=15)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, reportSchema); err != nil {
+			return fmt.Errorf("migration 15: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(15)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=16)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, aiSchema); err != nil {
+			return fmt.Errorf("migration 16: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(16)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=17)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, collectorMetadataSchema); err != nil {
+			return fmt.Errorf("migration 17: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(17)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=18)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, dataSourceSchema); err != nil {
+			return fmt.Errorf("migration 18: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(18)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=19)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, dataSourceJobSchema); err != nil {
+			return fmt.Errorf("migration 19: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(19)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=20)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetRegistrySchema); err != nil {
+			return fmt.Errorf("migration 20: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(20)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=21)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetDecisionSchema); err != nil {
+			return fmt.Errorf("migration 21: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(21)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=22)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetResolutionSchema); err != nil {
+			return fmt.Errorf("migration 22: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(22)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=23)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetProviderSchema); err != nil {
+			return fmt.Errorf("migration 23: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(23)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=24)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, externalMonitoringSchema); err != nil {
+			return fmt.Errorf("migration 24: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(24)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=25)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, prometheusSchema); err != nil {
+			return fmt.Errorf("migration 25: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(25)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=26)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, physicalInventorySchema); err != nil {
+			return fmt.Errorf("migration 26: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(26)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=27)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, globalTopologySchema); err != nil {
+			return fmt.Errorf("migration 27: %w", err)
+		}
+		if err = seedGlobalTopology(ctx, tx); err != nil {
+			return fmt.Errorf("migration 27 import: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(27)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=28)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetHardwareSchema); err != nil {
+			return fmt.Errorf("migration 28: %w", err)
+		}
+		if err = seedAssetHardware(ctx, tx); err != nil {
+			return fmt.Errorf("migration 28 import: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(28)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=29)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetLogSchema); err != nil {
+			return fmt.Errorf("migration 29: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(29)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=30)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, assetVoIPSchema); err != nil {
+			return fmt.Errorf("migration 30: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(30)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=31)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, collectorConfigSchema); err != nil {
+			return fmt.Errorf("migration 31: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(31)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=32)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, automationSchema); err != nil {
+			return fmt.Errorf("migration 32: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(32)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=33)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, configurationDriftSchema); err != nil {
+			return fmt.Errorf("migration 33: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(33)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=34)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, configurationRemediationSchema); err != nil {
+			return fmt.Errorf("migration 34: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(34)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=35)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, correlationSchema); err != nil {
+			return fmt.Errorf("migration 35: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(35)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=36)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, prometheusAlertSchema); err != nil {
+			return fmt.Errorf("migration 36: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(36)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=37)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, alertmanagerSchema); err != nil {
+			return fmt.Errorf("migration 37: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(37)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=38)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, hardwareIncidentSchema); err != nil {
+			return fmt.Errorf("migration 38: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(38)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=39)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, logIncidentSchema); err != nil {
+			return fmt.Errorf("migration 39: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(39)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=40)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, auditIncidentSchema); err != nil {
+			return fmt.Errorf("migration 40: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(40)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=41)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, configurationIncidentSchema); err != nil {
+			return fmt.Errorf("migration 41: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(41)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=42)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, topologyIncidentSchema); err != nil {
+			return fmt.Errorf("migration 42: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(42)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=43)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, logPatternSchema); err != nil {
+			return fmt.Errorf("migration 43: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(43)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=44)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, reportV2Schema); err != nil {
+			return fmt.Errorf("migration 44: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(44)`); err != nil {
+			return err
+		}
+	}
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version=45)`).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		if _, err = tx.Exec(ctx, reportScheduleSchema); err != nil {
+			return fmt.Errorf("migration 45: %w", err)
+		}
+		if _, err = tx.Exec(ctx, `INSERT INTO schema_migrations(version) VALUES(45)`); err != nil {
+			return err
+		}
+	}
 	if _, err = tx.Exec(ctx, `UPDATE agents SET connected=false`); err != nil {
 		return err
 	}
 	if _, err = tx.Exec(ctx, `UPDATE agent_sessions SET disconnected_at=now() WHERE disconnected_at IS NULL`); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	s.collectorStartedAt = time.Now().UTC()
+	return nil
 }
 
 var jsonOptions = protojson.MarshalOptions{UseProtoNames: true}
+
+func minTime(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}
 
 func wireJSON(m proto.Message) ([]byte, error) { return jsonOptions.Marshal(m) }
 func at(ts *timestamppb.Timestamp, fallback time.Time) time.Time {
@@ -131,6 +775,9 @@ func at(ts *timestamppb.Timestamp, fallback time.Time) time.Time {
 // success only after commit. A replay may change its transport attempt metadata,
 // but reusing a message ID for a different kind or business payload is rejected.
 func (s *Store) Ingest(ctx context.Context, e *pb.AgentEnvelope) error {
+	if err := collectorcontract.Validate(e); err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	raw, err := wireJSON(e)
@@ -198,6 +845,9 @@ func (s *Store) Ingest(ctx context.Context, e *pb.AgentEnvelope) error {
 		slog.DebugContext(ctx, "duplicate message accepted", "agent_id", e.AgentId, "message_id", e.MessageId, "kind", Kind(e))
 		return nil
 	}
+	if err = projectCollectorConfig(ctx, tx, e); err != nil {
+		return err
+	}
 	switch p := e.Payload.(type) {
 	case *pb.AgentEnvelope_Hello:
 		// Prefer the device's observation time to the transport's send time.
@@ -209,9 +859,10 @@ func (s *Store) Ingest(ctx context.Context, e *pb.AgentEnvelope) error {
 			_, err = tx.Exec(ctx, `UPDATE agents SET heartbeat=$2 WHERE agent_id=$1`, e.AgentId, b)
 		}
 		if err == nil {
-			_, err = tx.Exec(ctx, `UPDATE devices d SET online=CASE WHEN $2>=state_at THEN true ELSE online END,
-			state_at=GREATEST(state_at,$2),last_seen=GREATEST(d.last_seen,$2),received_at=now()
-			FROM agents a WHERE d.agent_id=a.agent_id AND d.device_id=a.local_device_id AND a.agent_id=$1`, e.AgentId, p.Heartbeat.Timestamp.AsTime())
+			_, err = tx.Exec(ctx, `UPDATE devices d SET online=CASE WHEN state_at>now()+interval '30 seconds' OR $2>=state_at THEN true ELSE online END,
+			state_at=CASE WHEN state_at>now()+interval '30 seconds' THEN $2 ELSE GREATEST(state_at,$2) END,
+			last_seen=CASE WHEN d.last_seen>now()+interval '30 seconds' THEN $2 ELSE GREATEST(d.last_seen,$2) END,received_at=now()
+			FROM agents a WHERE d.agent_id=a.agent_id AND d.device_id=a.local_device_id AND a.agent_id=$1`, e.AgentId, time.Now().UTC())
 		}
 	case *pb.AgentEnvelope_Inventory:
 		for _, d := range p.Inventory.Devices {
@@ -227,14 +878,53 @@ func (s *Store) Ingest(ctx context.Context, e *pb.AgentEnvelope) error {
 				break
 			}
 		}
+	case *pb.AgentEnvelope_Topology:
+		err = projectTopology(ctx, tx, e)
+	case *pb.AgentEnvelope_Telephony:
+		err = projectTelephony(ctx, tx, e)
+	case *pb.AgentEnvelope_CommandResult:
+		err = projectCommandResult(ctx, tx, e)
+	case *pb.AgentEnvelope_Logs:
+		var received time.Time
+		if err = tx.QueryRow(ctx, `SELECT now()`).Scan(&received); err == nil {
+			_, err = projectLogs(ctx, tx, e, received)
+		}
 	}
 	if err != nil {
+		return err
+	}
+	if err = projectAvailability(ctx, tx, e); err != nil {
+		return err
+	}
+	if err = s.refreshManagedMonitoring(ctx, tx, e); err != nil {
+		return err
+	}
+	if err = s.projectHealth(ctx, tx, e); err != nil {
+		return err
+	}
+	if err = s.projectResourceHealth(ctx, tx, e); err != nil {
+		return err
+	}
+	if err = s.projectCollectorAssets(ctx, tx, e); err != nil {
+		return err
+	}
+	if err = projectCollectorHardware(ctx, tx, e); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO hardware_signal_pending(sample_id) SELECT id FROM asset_hardware_samples WHERE agent_id=$1 AND message_id=$2 AND kind<>'metric' ON CONFLICT DO NOTHING`, e.AgentId, e.MessageId); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
 func inventory(ctx context.Context, tx pgx.Tx, agentID string, d *pb.Device, observed time.Time) error {
+	if observed.After(time.Now().Add(30 * time.Second)) {
+		// Preserve the full envelope, but don't let a future clock poison
+		// inventory chronology. Availability separately records the anomaly.
+		_, err := tx.Exec(ctx, `INSERT INTO devices(agent_id,device_id,name,source,state_at,last_seen)
+		VALUES($1,$2,$2,$3,now(),now()) ON CONFLICT(agent_id,device_id) DO NOTHING`, agentID, d.Id, d.Source)
+		return err
+	}
 	b, err := wireJSON(d)
 	if err != nil {
 		return err
@@ -242,26 +932,26 @@ func inventory(ctx context.Context, tx pgx.Tx, agentID string, d *pb.Device, obs
 	_, err = tx.Exec(ctx, `INSERT INTO devices(agent_id,device_id,name,hostname,vendor,model,type,management_address,source,online,state_at,inventory_at,last_seen,inventory)
 	VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11,$12,$13)
 	ON CONFLICT(agent_id,device_id) DO UPDATE SET
-	name=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.name ELSE devices.name END,
-	hostname=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.hostname ELSE devices.hostname END,
-	vendor=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.vendor ELSE devices.vendor END,
-	model=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.model ELSE devices.model END,
-	type=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.type ELSE devices.type END,
-	management_address=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.management_address ELSE devices.management_address END,
-	source=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.source ELSE devices.source END,
-	inventory=CASE WHEN devices.inventory_at IS NULL OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.inventory ELSE devices.inventory END,
-	inventory_at=GREATEST(devices.inventory_at,EXCLUDED.inventory_at),
-	online=CASE WHEN EXCLUDED.state_at>=devices.state_at THEN EXCLUDED.online ELSE devices.online END,
-	state_at=GREATEST(devices.state_at,EXCLUDED.state_at),last_seen=GREATEST(devices.last_seen,EXCLUDED.last_seen),received_at=now()`,
-		agentID, d.Id, d.Name, d.Hostname, d.Vendor, d.Model, d.Type.String(), d.ManagementAddress, d.Source, d.Online, observed, at(d.LastSeen, observed), b)
+	name=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.name ELSE devices.name END,
+	hostname=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.hostname ELSE devices.hostname END,
+	vendor=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.vendor ELSE devices.vendor END,
+	model=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.model ELSE devices.model END,
+	type=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.type ELSE devices.type END,
+	management_address=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.management_address ELSE devices.management_address END,
+	source=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.source ELSE devices.source END,
+	inventory=CASE WHEN devices.inventory_at IS NULL OR devices.inventory_at>now()+interval '30 seconds' OR EXCLUDED.inventory_at>=devices.inventory_at THEN EXCLUDED.inventory ELSE devices.inventory END,
+	inventory_at=CASE WHEN devices.inventory_at>now()+interval '30 seconds' THEN EXCLUDED.inventory_at ELSE GREATEST(devices.inventory_at,EXCLUDED.inventory_at) END,
+	online=CASE WHEN devices.state_at>now()+interval '30 seconds' OR EXCLUDED.state_at>=devices.state_at THEN EXCLUDED.online ELSE devices.online END,
+	state_at=CASE WHEN devices.state_at>now()+interval '30 seconds' THEN EXCLUDED.state_at ELSE GREATEST(devices.state_at,EXCLUDED.state_at) END,last_seen=CASE WHEN devices.last_seen>now()+interval '30 seconds' THEN EXCLUDED.last_seen ELSE GREATEST(devices.last_seen,EXCLUDED.last_seen) END,received_at=now()`,
+		agentID, d.Id, d.Name, d.Hostname, d.Vendor, d.Model, d.Type.String(), d.ManagementAddress, d.Source, d.Online, observed, minTime(at(d.LastSeen, observed), observed), b)
 	return err
 }
 
 func telemetry(ctx context.Context, tx pgx.Tx, e *pb.AgentEnvelope, i int, t *pb.TelemetrySample) error {
 	_, err := tx.Exec(ctx, `INSERT INTO devices(agent_id,device_id,name,source,online,state_at,last_seen)
-	VALUES($1,$2,$2,$3,true,$4,$4) ON CONFLICT(agent_id,device_id) DO UPDATE SET
-	online=CASE WHEN EXCLUDED.state_at>=devices.state_at THEN true ELSE devices.online END,
-	state_at=GREATEST(devices.state_at,EXCLUDED.state_at),last_seen=GREATEST(devices.last_seen,EXCLUDED.last_seen),received_at=now()`, e.AgentId, t.DeviceId, t.Source, t.ObservedAt.AsTime())
+	VALUES($1,$2,$2,$3,$5,$4,$4) ON CONFLICT(agent_id,device_id) DO UPDATE SET
+	online=CASE WHEN devices.state_at>now()+interval '30 seconds' OR EXCLUDED.state_at>=devices.state_at THEN true ELSE devices.online END,
+	state_at=CASE WHEN devices.state_at>now()+interval '30 seconds' THEN EXCLUDED.state_at ELSE GREATEST(devices.state_at,EXCLUDED.state_at) END,last_seen=CASE WHEN devices.last_seen>now()+interval '30 seconds' THEN EXCLUDED.last_seen ELSE GREATEST(devices.last_seen,EXCLUDED.last_seen) END,received_at=now() WHERE EXCLUDED.state_at<=now()+interval '30 seconds'`, e.AgentId, t.DeviceId, t.Source, t.ObservedAt.AsTime(), !t.ObservedAt.AsTime().After(time.Now().Add(30*time.Second)))
 	if err != nil {
 		return err
 	}

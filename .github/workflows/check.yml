@@ -14,7 +14,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:17-alpine
@@ -37,5 +37,17 @@ jobs:
           cache: true
       - name: Tests
         run: go test ./...
+      - name: Format
+        run: test -z "$(gofmt -l cmd internal api/proto)"
+      - name: Vet
+        run: go vet ./...
       - name: Build
         run: go build -trimpath -o bin/infrapulse-backend ./cmd/server
+      - name: Build Automation Worker
+        run: go build -trimpath -o bin/infrapulse-automation-worker ./cmd/automation-worker
+      - name: Python Runner adapter contract
+        run: python3 -B scripts/test_automation_runner.py
+      - name: Race detector
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race ./...

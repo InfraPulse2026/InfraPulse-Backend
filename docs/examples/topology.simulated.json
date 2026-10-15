@@ -1,0 +1,303 @@
+{
+  "generated_at": "2026-10-07T09:07:40.5587202Z",
+  "nodes": [
+    {
+      "id": "device:701b798e7e0ad16911673ca37e2c4f93a799130b5e09ee8838ace475f56042a5",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-003",
+      "known": true,
+      "label": "Simulated device 3",
+      "hostname": "sim-device-003",
+      "management_address": "192.0.2.3",
+      "vendor": "simulated",
+      "model": "development-simulator",
+      "type": "DEVICE_TYPE_SWITCH",
+      "source": "simulated",
+      "reported_online": true,
+      "agent_connected": false,
+      "last_seen": "2026-10-07T09:07:37Z"
+    },
+    {
+      "id": "device:81126b8205ac3cef1172d8ac3482b41e717ca32f726f9ea749909f6a859974f3",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-001",
+      "known": true,
+      "label": "Simulated device 1",
+      "hostname": "sim-device-001",
+      "management_address": "192.0.2.1",
+      "vendor": "simulated",
+      "model": "development-simulator",
+      "type": "DEVICE_TYPE_SWITCH",
+      "source": "simulated",
+      "reported_online": true,
+      "agent_connected": false,
+      "last_seen": "2026-10-07T09:07:37Z"
+    },
+    {
+      "id": "device:9b1d6ed5651cb723f9d95e8813f655fd83b6e9c533391736086b81596b111714",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:agent:f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "known": true,
+      "label": "backend-demo-simulator",
+      "type": "DEVICE_TYPE_SWITCH",
+      "source": "simulated",
+      "reported_online": true,
+      "agent_connected": false,
+      "last_seen": "2026-10-07T09:07:35Z"
+    },
+    {
+      "id": "device:d2c8c5c5215c70114a23d1c24954e68b83b40ec31261c759b8dd0c99f60369e7",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-002",
+      "known": true,
+      "label": "Simulated device 2",
+      "hostname": "sim-device-002",
+      "management_address": "192.0.2.2",
+      "vendor": "simulated",
+      "model": "development-simulator",
+      "type": "DEVICE_TYPE_SWITCH",
+      "source": "simulated",
+      "reported_online": true,
+      "agent_connected": false,
+      "last_seen": "2026-10-07T09:07:37Z"
+    },
+    {
+      "id": "device:fde82aeb95a0dea8f48d80c302f6b53985a3152d02b0c99ce23dbfc10b59848e",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-004",
+      "known": true,
+      "label": "Simulated device 4",
+      "hostname": "sim-device-004",
+      "management_address": "192.0.2.4",
+      "vendor": "simulated",
+      "model": "development-simulator",
+      "type": "DEVICE_TYPE_SWITCH",
+      "source": "simulated",
+      "reported_online": true,
+      "agent_connected": false,
+      "last_seen": "2026-10-07T09:07:37Z"
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge:0ba68f1d6ad5d890fbf1769399f4fa83743fd66b638bc0ba646b0057073973c8",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-004",
+      "from": "device:fde82aeb95a0dea8f48d80c302f6b53985a3152d02b0c99ce23dbfc10b59848e",
+      "to": "device:81126b8205ac3cef1172d8ac3482b41e717ca32f726f9ea749909f6a859974f3",
+      "local_port": {
+        "interface_id": "simulated:if-1",
+        "name": "sim-eth0",
+        "number": 1,
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "remote_port": {
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "protocol": "DISCOVERY_PROTOCOL_LLDP",
+      "source": "simulated",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.549837Z",
+      "expires_at": "2026-10-07T09:08:07Z",
+      "status": "active",
+      "observation_confidence": "high",
+      "resolution": {
+        "status": "resolved",
+        "method": "unique_hostname",
+        "confidence": "medium",
+        "candidate_node_ids": [
+          "device:81126b8205ac3cef1172d8ac3482b41e717ca32f726f9ea749909f6a859974f3"
+        ]
+      },
+      "evidence": [
+        {
+          "source": "simulated",
+          "value": "deterministic development topology",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "edge:0fd2879e9277a5b037847326d1a285845a2658f2154a3c6f73bc2b49e4f78cf3",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-002",
+      "from": "device:d2c8c5c5215c70114a23d1c24954e68b83b40ec31261c759b8dd0c99f60369e7",
+      "to": "device:701b798e7e0ad16911673ca37e2c4f93a799130b5e09ee8838ace475f56042a5",
+      "local_port": {
+        "interface_id": "simulated:if-1",
+        "name": "sim-eth0",
+        "number": 1,
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "remote_port": {
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "protocol": "DISCOVERY_PROTOCOL_LLDP",
+      "source": "simulated",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.543919Z",
+      "expires_at": "2026-10-07T09:08:07Z",
+      "status": "active",
+      "observation_confidence": "high",
+      "resolution": {
+        "status": "resolved",
+        "method": "unique_hostname",
+        "confidence": "medium",
+        "candidate_node_ids": [
+          "device:701b798e7e0ad16911673ca37e2c4f93a799130b5e09ee8838ace475f56042a5"
+        ]
+      },
+      "evidence": [
+        {
+          "source": "simulated",
+          "value": "deterministic development topology",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "edge:60634bcce31e46617056c03a59f34f746ade3064e3ba3f5f701f01299edfebc6",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-003",
+      "from": "device:701b798e7e0ad16911673ca37e2c4f93a799130b5e09ee8838ace475f56042a5",
+      "to": "device:fde82aeb95a0dea8f48d80c302f6b53985a3152d02b0c99ce23dbfc10b59848e",
+      "local_port": {
+        "interface_id": "simulated:if-1",
+        "name": "sim-eth0",
+        "number": 1,
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "remote_port": {
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "protocol": "DISCOVERY_PROTOCOL_LLDP",
+      "source": "simulated",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.547049Z",
+      "expires_at": "2026-10-07T09:08:07Z",
+      "status": "active",
+      "observation_confidence": "high",
+      "resolution": {
+        "status": "resolved",
+        "method": "unique_hostname",
+        "confidence": "medium",
+        "candidate_node_ids": [
+          "device:fde82aeb95a0dea8f48d80c302f6b53985a3152d02b0c99ce23dbfc10b59848e"
+        ]
+      },
+      "evidence": [
+        {
+          "source": "simulated",
+          "value": "deterministic development topology",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "id": "edge:c78dabdd03beab50b87ac2c554fd3e9e170c71ff045fbbb27dabc5e7c7057744",
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-001",
+      "from": "device:81126b8205ac3cef1172d8ac3482b41e717ca32f726f9ea749909f6a859974f3",
+      "to": "device:d2c8c5c5215c70114a23d1c24954e68b83b40ec31261c759b8dd0c99f60369e7",
+      "local_port": {
+        "interface_id": "simulated:if-1",
+        "name": "sim-eth0",
+        "number": 1,
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "remote_port": {
+        "subtype": 5,
+        "raw_id": "c2ltLWV0aDA="
+      },
+      "protocol": "DISCOVERY_PROTOCOL_LLDP",
+      "source": "simulated",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.539368Z",
+      "expires_at": "2026-10-07T09:08:07Z",
+      "status": "active",
+      "observation_confidence": "high",
+      "resolution": {
+        "status": "resolved",
+        "method": "unique_hostname",
+        "confidence": "medium",
+        "candidate_node_ids": [
+          "device:d2c8c5c5215c70114a23d1c24954e68b83b40ec31261c759b8dd0c99f60369e7"
+        ]
+      },
+      "evidence": [
+        {
+          "source": "simulated",
+          "value": "deterministic development topology",
+          "confidence": "high"
+        }
+      ]
+    }
+  ],
+  "collections": [
+    {
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-001",
+      "message_id": "6d647fe9-d75b-4d49-9f2a-52822af249f1",
+      "source": "simulated",
+      "completeness": "SNAPSHOT_COMPLETENESS_COMPLETE",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "collected_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.539368Z",
+      "ttl_seconds": 30,
+      "expiry_assumption": "simulated scenario lifetime",
+      "observation_count": 1,
+      "clock_skew": false
+    },
+    {
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-002",
+      "message_id": "b14d7cc7-8e23-4361-9f34-8cbe4ab55694",
+      "source": "simulated",
+      "completeness": "SNAPSHOT_COMPLETENESS_COMPLETE",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "collected_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.543919Z",
+      "ttl_seconds": 30,
+      "expiry_assumption": "simulated scenario lifetime",
+      "observation_count": 1,
+      "clock_skew": false
+    },
+    {
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-003",
+      "message_id": "4e4cc2e3-47c9-48a8-bf2d-07ee4145b821",
+      "source": "simulated",
+      "completeness": "SNAPSHOT_COMPLETENESS_COMPLETE",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "collected_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.547049Z",
+      "ttl_seconds": 30,
+      "expiry_assumption": "simulated scenario lifetime",
+      "observation_count": 1,
+      "clock_skew": false
+    },
+    {
+      "agent_id": "f0977058-efc0-4235-a9f6-bc4a3cc64893",
+      "device_id": "simulated:device-004",
+      "message_id": "edebde00-5056-4bd3-a75d-8b2d7e9a0c2c",
+      "source": "simulated",
+      "completeness": "SNAPSHOT_COMPLETENESS_COMPLETE",
+      "observed_at": "2026-10-07T09:07:37Z",
+      "collected_at": "2026-10-07T09:07:37Z",
+      "received_at": "2026-10-07T09:07:39.549837Z",
+      "ttl_seconds": 30,
+      "expiry_assumption": "simulated scenario lifetime",
+      "observation_count": 1,
+      "clock_skew": false
+    }
+  ],
+  "truncated": false,
+  "inventory_truncated": false
+}

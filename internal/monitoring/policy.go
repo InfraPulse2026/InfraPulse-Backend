@@ -37,12 +37,19 @@ type Settings struct {
 }
 
 func Describe(p Policy, origin string) Settings {
-	return Settings{Policy: p, Origin: origin, DeliveryMode: "manual_agent_yaml", ApplicationStatus: "unverified",
+	out := Settings{Policy: p, Origin: origin, DeliveryMode: "manual_agent_yaml", ApplicationStatus: "unverified",
 		LocalTelemetryYAML: fmt.Sprintf("telemetry:\n  fast_interval: %ds\n  inventory_interval: %ds\n  topology_interval: %ds\n  heartbeat_interval: 10s\n", p.TelemetryIntervalSeconds, p.InventoryIntervalSeconds, p.TopologyIntervalSeconds),
 		RemotePollingYAML:  fmt.Sprintf("polling:\n  fast_interval: %ds\n  inventory_interval: %ds\n  topology_interval: %ds\n", p.TelemetryIntervalSeconds, p.InventoryIntervalSeconds, p.TopologyIntervalSeconds),
 		// Agent v1 rejects remote.topology_ttl greater than 24 hours.
 		RecommendedTopologyTTLSeconds: min(MaxIntervalSeconds, StaleAfterSeconds(p.TopologyIntervalSeconds)),
 	}
+	if origin == "collector_applied" {
+		out.DeliveryMode = "managed_collector_stream"
+		out.ApplicationStatus = "applied"
+		out.LocalTelemetryYAML = ""
+		out.RemotePollingYAML = ""
+	}
+	return out
 }
 
 // Tolerate two collection intervals plus bounded scheduling/network jitter.

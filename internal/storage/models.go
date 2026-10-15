@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/availability"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/monitoring"
 	"time"
 )
@@ -28,6 +29,8 @@ type Device struct {
 	ManagementAddress  string               `json:"management_address"`
 	Source             string               `json:"source"`
 	Online             bool                 `json:"online"`
+	ReportedOnline     *bool                `json:"reported_online"`
+	Availability       availability.State   `json:"availability"`
 	AgentConnected     bool                 `json:"agent_connected"`
 	LastSeen           time.Time            `json:"last_seen"`
 	ReceivedAt         time.Time            `json:"received_at"`

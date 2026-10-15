@@ -1,0 +1,5 @@
+CREATE TABLE report_schedules(id text PRIMARY KEY,revision bigint NOT NULL CHECK(revision>0),owner_id text NOT NULL REFERENCES access_users(id),enabled boolean NOT NULL,definition jsonb NOT NULL,next_run_at timestamptz NOT NULL,last_snapshot_id text REFERENCES report_snapshots(id),failure text NOT NULL DEFAULT '',updated_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX report_schedule_due ON report_schedules(next_run_at,id) WHERE enabled;
+CREATE TABLE report_schedule_events(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,schedule_id text NOT NULL REFERENCES report_schedules(id),actor_id text NOT NULL REFERENCES access_users(id),revision bigint NOT NULL,definition jsonb NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE report_schedule_runs(schedule_id text NOT NULL REFERENCES report_schedules(id),revision bigint NOT NULL,period_to timestamptz NOT NULL,snapshot_id text NOT NULL UNIQUE REFERENCES report_snapshots(id),PRIMARY KEY(schedule_id,revision,period_to));
+CREATE UNIQUE INDEX report_schedule_owner_name ON report_schedules(owner_id,lower(definition->>'name'));

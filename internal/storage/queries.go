@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/monitoring"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -26,10 +27,16 @@ func (s *Store) Agents(ctx context.Context) ([]Agent, error) {
 }
 
 func (s *Store) Devices(ctx context.Context, agentID, id string, limit, offset int) ([]Device, error) {
-	rows, err := s.pool.Query(ctx, `SELECT d.agent_id,d.device_id,d.name,d.hostname,d.vendor,d.model,d.type,d.management_address,d.source,
+	now := time.Now().UTC()
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(context.Background()) }()
+	rows, err := tx.Query(ctx, `SELECT d.agent_id,d.device_id,d.name,d.hostname,d.vendor,d.model,d.type,d.management_address,d.source,
 	d.online,a.connected AND a.last_seen>$3,d.last_seen,d.received_at,d.inventory,
 	COALESCE(p.telemetry_interval_seconds,$6),COALESCE(p.inventory_interval_seconds,$7),COALESCE(p.topology_interval_seconds,$8),
-	p.device_id IS NOT NULL,t.observed_at,t.received_at
+	CASE WHEN p.device_id IS NULL THEN 'backend_default' WHEN p.origin='collector_applied' THEN 'collector_applied' ELSE 'device_override' END,t.observed_at,t.received_at
 	FROM devices d JOIN agents a USING(agent_id)
 	LEFT JOIN monitoring_policies p ON p.agent_id=d.agent_id AND p.device_id=d.device_id
 	LEFT JOIN LATERAL (SELECT observed_at,received_at FROM telemetry WHERE agent_id=d.agent_id AND device_id=d.device_id ORDER BY observed_at DESC,id DESC LIMIT 1) t ON true
@@ -42,23 +49,37 @@ func (s *Store) Devices(ctx context.Context, agentID, id string, limit, offset i
 	for rows.Next() {
 		var d Device
 		var policy monitoring.Policy
-		var override bool
+		var origin string
 		var observed, received *time.Time
 		if err = rows.Scan(&d.AgentID, &d.DeviceID, &d.Name, &d.Hostname, &d.Vendor, &d.Model, &d.Type, &d.ManagementAddress, &d.Source, &d.Online, &d.AgentConnected, &d.LastSeen, &d.ReceivedAt, &d.Inventory,
-			&policy.TelemetryIntervalSeconds, &policy.InventoryIntervalSeconds, &policy.TopologyIntervalSeconds, &override, &observed, &received); err != nil {
+			&policy.TelemetryIntervalSeconds, &policy.InventoryIntervalSeconds, &policy.TopologyIntervalSeconds, &origin, &observed, &received); err != nil {
 			return nil, err
 		}
 		d.LastSeen = d.LastSeen.UTC()
 		d.ReceivedAt = d.ReceivedAt.UTC()
-		origin := "backend_default"
-		if override {
-			origin = "device_override"
-		}
+
 		d.Monitoring = monitoring.Describe(policy, origin)
-		d.TelemetryFreshness = monitoring.Evaluate(time.Now(), observed, received, policy.TelemetryIntervalSeconds)
+		d.TelemetryFreshness = monitoring.Evaluate(now, observed, received, policy.TelemetryIntervalSeconds)
 		items = append(items, d)
 	}
-	return items, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	states, err := s.availabilityPage(ctx, tx, agentID, id, limit, offset, now)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].Availability = states[deviceKey{items[i].AgentID, items[i].DeviceID}]
+		items[i].ReportedOnline = items[i].Availability.LastReportedOnline
+		items[i].Online = items[i].Availability.Status == "online"
+		items[i].AgentConnected = items[i].Availability.AgentConnected
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (s *Store) Device(ctx context.Context, agentID, id string) (Device, error) {

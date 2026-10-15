@@ -5,3 +5,10 @@ bin/
 coverage.out
 state/
 .idea/
+pki-secrets/
+automation-secrets/
+automation-work/
+__pycache__/
+*.pyc
+*.key
+*.pem

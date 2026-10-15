@@ -30,6 +30,7 @@ message AgentEnvelope {
     TelephonyUpdate telephony = 17;
     CommandResult command_result = 18;
     ErrorReport error = 20;
+    ConfigApplyStatus config_status = 21;
   }
 }
 
@@ -38,6 +39,7 @@ message ControllerEnvelope {
     HelloAck hello_ack = 1;
     Command command = 2;
     MessageACK message_ack = 3;
+    DesiredConfigSnapshot desired_config = 4;
   }
 }
 
@@ -59,12 +61,125 @@ message AgentHello {
   Device device = 6;
   uint32 protocol_version = 7;
   bool application_ack = 8;
+  bool managed_config_v1 = 9;
+  bool remote_management_enabled = 10;
+  AppliedConfigState applied_config = 11;
 }
 
 message HelloAck {
   bool accepted = 1;
   uint32 protocol_version = 2;
   bool application_ack = 3;
+  bool managed_config_v1 = 4;
+}
+
+// A complete Backend-owned monitoring namespace. No local administrative
+// settings or credential values are allowed. Configuration v1 is closed: unknown
+// fields are rejected, so extensions require explicit capability negotiation.
+message DesiredConfigSnapshot {
+  string collector_id = 1;
+  string session_id = 2;
+  uint64 revision = 3;
+  string configuration_digest = 4;
+  google.protobuf.Timestamp issued_at = 5;
+  repeated ManagedTargetSpec targets = 6;
+}
+
+message ManagedTargetPolling {
+  google.protobuf.Duration fast_interval = 1;
+  google.protobuf.Duration medium_interval = 2;
+  google.protobuf.Duration inventory_interval = 3;
+  google.protobuf.Duration topology_interval = 4;
+  google.protobuf.Duration timeout = 5;
+}
+
+message ManagedTargetSpec {
+  string target_id = 1;
+  string protocol = 2;
+  bool enabled = 3;
+  string endpoint = 4;
+  string credential_ref = 5;
+  string name = 6;
+  string vendor_hint = 7;
+  PhysicalLocation location = 8;
+  ManagedTargetPolling polling = 9;
+  // A local administrator-defined key, never a filesystem path.
+  string ca_ref = 10;
+  oneof options {
+    ManagedSNMPOptions snmp = 20;
+    ManagedSIPOptions sip = 21;
+    ManagedRedfishOptions redfish = 22;
+    ManagedIPMIOptions ipmi = 23;
+  }
+}
+message ManagedSNMPOptions {
+  string version = 1;
+  string security_level = 2;
+  string auth_protocol = 3;
+  string privacy_protocol = 4;
+  string context_name = 5;
+  uint32 port = 6;
+  int32 retries = 7;
+}
+message ManagedSIPOptions {
+  uint32 port = 1;
+  string transport = 2;
+  string from_user = 3;
+  string to_user = 4;
+  string domain = 5;
+  string server_name = 6;
+  uint32 failure_threshold = 7;
+  google.protobuf.Duration latency_threshold = 8;
+}
+message ManagedRedfishOptions {
+  string auth = 1;
+  google.protobuf.Duration request_timeout = 2;
+  int32 max_resources = 3;
+  int32 max_pages = 4;
+  int32 max_requests = 5;
+}
+message ManagedIPMIOptions {
+  optional uint32 port = 1;
+  optional uint32 cipher_suite = 2;
+  string privilege = 3;
+  int32 retries = 4;
+  google.protobuf.Duration request_timeout = 5;
+  google.protobuf.Duration max_session_duration = 6;
+  int32 max_operations = 7;
+  int32 max_sdr_records = 8;
+  int32 max_sdr_bytes = 9;
+  int32 max_fru_records = 10;
+  int32 max_fru_bytes = 11;
+  int32 max_poll_bytes = 12;
+  google.protobuf.Duration sdr_cache_ttl = 13;
+}
+enum ConfigStatus {
+  CONFIG_STATUS_UNSPECIFIED = 0;
+  CONFIG_STATUS_RECEIVED = 1;
+  CONFIG_STATUS_VALIDATING = 2;
+  CONFIG_STATUS_APPLIED = 3;
+  CONFIG_STATUS_REJECTED = 4;
+  CONFIG_STATUS_FAILED = 5;
+}
+message AppliedConfigState {
+  uint64 revision = 1;
+  string configuration_digest = 2;
+  ConfigStatus status = 3;
+  google.protobuf.Timestamp applied_at = 4;
+  uint32 target_count = 5;
+}
+// APPLIED means runtime activation and last-known-good persistence succeeded.
+// A MessageACK acknowledges this envelope's receipt, not configuration apply.
+message ConfigApplyStatus {
+  string collector_id = 1;
+  uint64 revision = 2;
+  string configuration_digest = 3;
+  ConfigStatus status = 4;
+  google.protobuf.Timestamp applied_at = 5;
+  string error_code = 6;
+  string sanitized_error_message = 7;
+  uint64 applied_revision = 8;
+  string applied_digest = 9;
 }
 
 message Capability {
@@ -138,6 +253,14 @@ message Device {
   repeated Service services = 36;
   FirewallSnapshot firewall = 37;
   repeated NetworkState networks = 38;
+
+  HardwareInventory hardware = 39;
+  ObservationMetadata observation = 40;
+  repeated IdentityEvidence identity_evidence = 41;
+  // Phase6-only types and normalization diagnostics remain invisible to legacy
+  // peers, which may reject unknown identifier types or mistake diagnostics for
+  // identifiers. New peers consume both lists as one bounded evidence set.
+  repeated IdentityEvidence extended_identity_evidence = 42;
 }
 
 message Evidence {
@@ -158,6 +281,66 @@ message InventoryComponent {
   string hardware_revision = 9;
   string firmware_version = 10;
   string software_version = 11;
+  HardwareInventory hardware = 12;
+  ObservationMetadata observation = 13;
+}
+
+// Generic hardware facts, independent of the management protocol and asset
+// resolution. Operational state and rollup health are distinct from health.
+message HardwareStatus {
+  string health = 1;
+  string health_rollup = 2;
+  string state = 3;
+}
+message ResourceRelationship {
+  string type = 1;
+  string target_resource_id = 2;
+}
+message HardwareInventory {
+  string resource_type = 1;
+  string hardware_uuid = 2;
+  string sku = 3;
+  string part_number = 4;
+  string bios_version = 5;
+  string power_state = 6;
+  string chassis_type = 7;
+  string manager_type = 8;
+  string asset_tag = 9;
+  string physical_security = 10;
+  string device_location = 11;
+  string memory_type = 12;
+  string error_correction = 13;
+  string protocol = 14;
+  string media_type = 15;
+  optional uint64 capacity_bytes = 16;
+  optional uint32 cores = 17;
+  optional uint32 threads = 18;
+  repeated string network_addresses = 19;
+  HardwareStatus status = 20;
+  repeated ResourceRelationship relations = 21;
+}
+message ComponentHealth {
+  string id = 1;
+  string resource_id = 2;
+  string name = 3;
+  HardwareStatus status = 4;
+  ObservationMetadata observation = 5;
+}
+message IdentityEvidence {
+  string type = 1;
+  string value = 2;
+  bytes raw_value = 3;
+  optional uint32 subtype = 4;
+  SourceRef source = 5;
+  string confidence = 6;
+  string subject_id = 7;
+  // Subject scope is local to SourceRef, never a globally resolved Asset ID.
+  string subject_kind = 8;
+  string original_value = 9;
+  string origin = 10;
+  ObservationTime time = 11;
+  // Invalid/rejected facts are diagnostics and cannot be used for matching.
+  string normalization = 12;
 }
 
 message CPUStats {
@@ -264,6 +447,10 @@ message Metric {
   string name = 1;
   double value = 2;
   string unit = 3;
+  string resource_id = 4;
+  string component_id = 5;
+  HardwareStatus status = 6;
+  ObservationMetadata observation = 7;
 }
 
 message TelemetrySample {
@@ -279,6 +466,10 @@ message TelemetrySample {
   repeated Metric metrics = 10;
   optional bool uptime_available = 11;
   string uptime_source = 12;
+  repeated ComponentHealth hardware_health = 13;
+  ObservationMetadata observation = 14;
+  repeated IdentityEvidence identity_evidence = 15;
+  repeated IdentityEvidence extended_identity_evidence = 16;
 }
 
 // P0 emits a single sample in each batch. The wire contract can batch multiple
@@ -309,6 +500,7 @@ message Heartbeat {
   uint32 remote_device_count = 5;
   QueueState queue = 6;
   CertificateStatus certificate = 7;
+  ConfigApplyStatus managed_config = 8;
 }
 
 message CertificateStatus {
@@ -323,6 +515,9 @@ message CertificateStatus {
 message InventoryUpdate {
   google.protobuf.Timestamp observed_at = 1;
   repeated Device devices = 2;
+  // Empty/UNSPECIFIED preserves legacy semantics. No deletion is implied.
+  SnapshotCompleteness completeness = 3;
+  ObservationMetadata observation = 4;
 }
 
 enum SnapshotCompleteness {
@@ -351,6 +546,18 @@ message TopologyUpdate {
   uint32 ttl_seconds = 6;
   string expiry_assumption = 7;
   repeated Neighbor observations = 8;
+  ObservationMetadata observation = 9;
+}
+
+// IANA address family and raw octets preserve advertised address distinctions.
+// Address is canonical IP text when that family is understood; unknown families
+// retain raw_address without triggering a connection or target discovery.
+message ManagementAddress {
+  uint32 address_family = 1;
+  string address = 2;
+  bytes raw_address = 3;
+  optional uint32 interface_subtype = 4;
+  optional uint32 interface_id = 5;
 }
 
 message Neighbor {
@@ -372,6 +579,24 @@ message Neighbor {
   google.protobuf.Timestamp expires_at = 16;
   repeated Evidence evidence = 17;
   string confidence = 18;
+  ObservationMetadata observation = 19;
+  repeated IdentityEvidence identity_evidence = 20;
+  string observation_id = 21;
+  // Directed L2 observation, not confirmation of a physical cable.
+  string kind = 22;
+  optional uint32 local_interface_index = 23;
+  string local_interface_mac = 24;
+  string local_interface_description = 25;
+  string local_interface_alias = 26;
+  repeated ManagementAddress remote_management_addresses = 27;
+  string remote_system_description = 28;
+  string remote_platform = 29;
+  string remote_model = 30;
+  string remote_software_version = 31;
+  repeated string remote_capabilities_supported = 32;
+  repeated string remote_capabilities_enabled = 33;
+  // Reported source age; missing differs from measured zero.
+  optional uint32 age_seconds = 34;
 }
 
 message Event {
@@ -382,6 +607,7 @@ message Event {
   string severity = 5;
   string message = 6;
   string source = 7;
+  ObservationMetadata observation = 8;
 }
 
 message EventBatch {
@@ -487,6 +713,7 @@ message Service {
   google.protobuf.Timestamp observed_at = 4;
   string source = 5;
   repeated ServiceInstance instances = 6;
+  ObservationMetadata observation = 7;
 }
 message ServiceInstance {
   string name = 1;
@@ -502,6 +729,7 @@ message NetworkState {
   repeated string addresses = 6;
   string source = 7;
   google.protobuf.Timestamp observed_at = 8;
+  ObservationMetadata observation = 9;
 }
 message FirewallSnapshot {
   google.protobuf.Timestamp observed_at = 1;
@@ -512,6 +740,7 @@ message FirewallSnapshot {
   repeated FirewallForwarding forwardings = 6;
   repeated FirewallRule rules = 7;
   repeated FirewallRedirect redirects = 8;
+  ObservationMetadata observation = 9;
 }
 message FirewallZone {
   string id = 1;
@@ -560,6 +789,46 @@ message AuditRecord {
   string result = 9;
   string host = 10;
 }
+// Sender header claims remain on LogRecord; this metadata distinguishes them
+// from transport evidence. Raw payload contains sanitized non-UTF-8 octets.
+message SyslogMetadata {
+  uint32 version = 1;
+  string message_id = 2;
+  string structured_data = 3;
+  string raw_timestamp = 4;
+  string format = 5;
+  string parse_status = 6;
+  string peer_ip = 7;
+  string transport = 8;
+  string tls_identity = 9;
+  bool authenticated = 10;
+  bool managed = 11;
+  bytes raw_payload = 12;
+}
+// Logical source attribution is independent of Backend asset resolution.
+message SourceRef {
+  string type = 1;
+  string collector_id = 2;
+  string target_id = 3;
+  string protocol = 4;
+  string instance_id = 5;
+  string provenance = 6;
+  string resource_id = 7;
+}
+// received_at belongs to the Backend. Missing offset/uncertainty are unknown;
+// present zero values are measured zero. No clock correction is applied here.
+message ObservationTime {
+  google.protobuf.Timestamp source_timestamp = 1;
+  google.protobuf.Timestamp observed_at = 2;
+  google.protobuf.Timestamp collected_at = 3;
+  google.protobuf.Duration clock_offset = 4;
+  google.protobuf.Duration uncertainty = 5;
+  string clock_quality = 6;
+}
+message ObservationMetadata {
+  SourceRef source = 1;
+  ObservationTime time = 2;
+}
 message LogRecord {
   string id = 1;
   string device_id = 2;
@@ -578,12 +847,16 @@ message LogRecord {
   string file_identity = 15;
   int64 offset = 16;
   AuditRecord audit = 17;
+  SyslogMetadata syslog = 18;
+  ObservationMetadata observation = 19;
 }
-// Cursor advances after RAM outbox admission, not after durable delivery.
+// Local cursors advance after configured outbox admission, independently of
+// Backend application ACK. Durable delivery is bounded and at-least-once.
 message LogBatch {
   google.protobuf.Timestamp observed_at = 1;
   string source = 2;
   repeated LogRecord records = 3;
+  ObservationMetadata observation = 4;
 }
 message TelephonyHealth {
   string target_id = 1;
@@ -597,9 +870,11 @@ message TelephonyHealth {
   string state = 9;
   string error_category = 10;
   string source = 11;
+  ObservationMetadata observation = 12;
 }
 message TelephonyUpdate {
   google.protobuf.Timestamp observed_at = 1;
   string source = 2;
   repeated TelephonyHealth targets = 3;
+  ObservationMetadata observation = 4;
 }

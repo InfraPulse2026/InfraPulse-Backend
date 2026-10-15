@@ -1,0 +1,34 @@
+# Optional Linux worker. Backend must first apply migration 034.
+services:
+  backend:
+    environment:
+      AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-false}
+      AUTOMATION_ENCRYPTION_KEY: ${AUTOMATION_ENCRYPTION_KEY:-}
+  automation-worker:
+    profiles: [automation]
+    build:
+      context: .
+      dockerfile: Dockerfile.automation
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-infrapulse}:${POSTGRES_PASSWORD:-infrapulse_dev}@postgres:5432/${POSTGRES_DB:-infrapulse}?sslmode=disable
+      AUTOMATION_WORKER_ID: ${AUTOMATION_WORKER_ID:-worker_one}
+      AUTOMATION_ENCRYPTION_KEY: ${AUTOMATION_ENCRYPTION_KEY:-}
+      AUTOMATION_ALLOWED_CIDRS: ${AUTOMATION_ALLOWED_CIDRS:-}
+    volumes:
+      - ./automation-secrets:/run/automation-credentials:ro
+    tmpfs:
+      - /work/jobs:uid=10001,gid=10001,mode=0700,size=128m
+      - /tmp:uid=10001,gid=10001,mode=0700,size=32m
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 1.0
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 15s

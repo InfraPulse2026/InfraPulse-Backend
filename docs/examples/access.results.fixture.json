@@ -1,0 +1,13 @@
+{
+  "data_source": "local_fixture_and_unmodified_simulator",
+  "anonymous": 401,
+  "viewer_read": 200,
+  "viewer_write": 403,
+  "operator_write": 200,
+  "cookie_without_csrf": 403,
+  "cookie_with_csrf": 200,
+  "revoked_session": 401,
+  "last_admin": 409,
+  "device_count": 3,
+  "audit_count": 10
+}

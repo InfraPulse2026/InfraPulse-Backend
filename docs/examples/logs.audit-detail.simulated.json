@@ -1,0 +1,45 @@
+{
+  "items": [
+    {
+      "id": 8,
+      "agent_id": "271c1729-34ca-46cc-8596-c790bd125a12",
+      "device_id": "simulated:device-001",
+      "record_id": "simulated:audit:4",
+      "message_id": "2175e6db-3205-4d88-b86c-2d033b9c6b11",
+      "source": "simulated",
+      "source_id": "simulated:audit",
+      "event_at": "2026-10-07T20:05:37Z",
+      "observed_at": "2026-10-07T20:05:37Z",
+      "original_timestamp": "2026-10-07T20:05:37Z",
+      "received_at": "2026-10-07T20:05:38.27277Z",
+      "time_basis": "original_timestamp",
+      "severity": null,
+      "severity_name": "unknown",
+      "facility": null,
+      "host": "",
+      "process": "",
+      "process_id": "",
+      "message": "Simulated denied execution for audit analysis fixture",
+      "raw": "type=SYSCALL msg=audit(1791403537.000:5): uid=1000 auid=1000 pid=504 syscall=59 success=no exe=\"/simulated/denied\"",
+      "truncated": false,
+      "redacted": false,
+      "file_identity": "",
+      "offset": 0,
+      "audit": {
+        "event_key": "audit:c364e1fe03b09dd0d1cc838bce403ee7d0ff8567b2bee4afc04b3e405f4713ff",
+        "event_id": "1791403537.000:5",
+        "record_type": "SYSCALL",
+        "uid": 1000,
+        "auid": 1000,
+        "pid": 504,
+        "executable": "/simulated/denied",
+        "syscall": "59",
+        "success": false,
+        "result": "denied",
+        "host": ""
+      }
+    }
+  ],
+  "next_before_id": null,
+  "limit": 100
+}

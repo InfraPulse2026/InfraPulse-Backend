@@ -10,7 +10,12 @@ import (
 	"time"
 
 	pb "github.com/InfraPulse2026/InfraPulse-Backend/api/gen/infrapulse/v1"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/collectorcontract"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/commands"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/logbook"
 	"github.com/InfraPulse2026/InfraPulse-Backend/internal/storage"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/telephony"
+	"github.com/InfraPulse2026/InfraPulse-Backend/internal/topology"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -26,40 +31,49 @@ type Repository interface {
 }
 
 type Controller struct {
+	managedConfig bool
 	pb.UnimplementedAgentServiceServer
-	repo   Repository
-	log    *slog.Logger
-	mu     sync.Mutex
-	active map[string]bool
-	slots  chan struct{}
+	repo           Repository
+	log            *slog.Logger
+	mu             sync.Mutex
+	active         map[string]bool
+	ready          map[string]*readyStream
+	slots          chan struct{}
+	authorizeAgent func(context.Context, string) error
 }
 
-func New(repo Repository, log *slog.Logger) *Controller {
-	return &Controller{repo: repo, log: log, active: make(map[string]bool), slots: make(chan struct{}, 128)}
+type Option func(*Controller)
+
+func WithAgentAuthorizer(authorize func(context.Context, string) error) Option {
+	return func(c *Controller) { c.authorizeAgent = authorize }
 }
 
-// All controller messages share this serialized send path. gRPC permits one
-// sender concurrently with one receiver, but not concurrent Send calls.
-type streamSender struct {
-	mu     sync.Mutex
-	stream grpc.BidiStreamingServer[pb.AgentEnvelope, pb.ControllerEnvelope]
+func New(repo Repository, log *slog.Logger, options ...Option) *Controller {
+	c := &Controller{repo: repo, log: log, active: make(map[string]bool), ready: make(map[string]*readyStream), slots: make(chan struct{}, 128)}
+	for _, option := range options {
+		option(c)
+	}
+	return c
 }
 
-func (s *streamSender) send(e *pb.ControllerEnvelope) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.stream.Send(e)
+func (c *Controller) authorize(ctx context.Context, id string) error {
+	if c.authorizeAgent != nil && c.authorizeAgent(ctx, id) != nil {
+		return status.Error(codes.Unauthenticated, "agent certificate authorization failed")
+	}
+	return nil
 }
 
 func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, pb.ControllerEnvelope]) error {
-	sender := &streamSender{stream: stream}
 	select {
 	case c.slots <- struct{}{}:
 		defer func() { <-c.slots }()
 	default:
 		return status.Error(codes.ResourceExhausted, "controller stream limit reached")
 	}
-	e, err := stream.Recv()
+	sender := newStreamSender(stream)
+	defer sender.stop(status.Error(codes.Canceled, "agent stream closed"))
+	received := receiveMessages(sender.ctx, stream)
+	e, err := sender.receive(received)
 	if err != nil {
 		return err
 	}
@@ -70,6 +84,9 @@ func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, p
 	if h == nil || h.ProtocolVersion != 1 || h.AgentId != e.AgentId || h.SessionId != e.SessionId {
 		return status.Error(codes.FailedPrecondition, "first message must be a matching protocol-v1 hello")
 	}
+	if err = c.authorize(sender.ctx, e.AgentId); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	if c.active[e.AgentId] {
 		c.mu.Unlock()
@@ -79,6 +96,14 @@ func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, p
 	c.mu.Unlock()
 	registered := false
 	defer func() {
+		// Remove readiness before database cleanup, so a closing stream cannot
+		// accept a new command while Disconnect is still running.
+		sender.stop(status.Error(codes.Canceled, "agent stream closed"))
+		c.mu.Lock()
+		if current := c.ready[e.AgentId]; current != nil && current.sender == sender && current.sessionID == e.SessionId {
+			delete(c.ready, e.AgentId)
+		}
+		c.mu.Unlock()
 		if registered {
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			if err := c.repo.Disconnect(ctx, e.AgentId, e.SessionId); err != nil {
@@ -90,19 +115,26 @@ func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, p
 		delete(c.active, e.AgentId)
 		c.mu.Unlock()
 	}()
-	if err = c.persist(stream.Context(), e); err != nil {
+	if err = c.persist(sender.ctx, e); err != nil {
 		return err
 	}
 	registered = true
 	applicationACK := h.ApplicationAck
-	if err = sender.send(&pb.ControllerEnvelope{Payload: &pb.ControllerEnvelope_HelloAck{HelloAck: &pb.HelloAck{Accepted: true, ProtocolVersion: 1, ApplicationAck: applicationACK}}}); err != nil {
+	managedConfig := c.managedConfig && c.authorizeAgent != nil && verifiedManagedPeer(sender.ctx) && h.ManagedConfigV1 && h.RemoteManagementEnabled && applicationACK
+	if err = sender.send(&pb.ControllerEnvelope{Payload: &pb.ControllerEnvelope_HelloAck{HelloAck: &pb.HelloAck{Accepted: true, ProtocolVersion: 1, ApplicationAck: applicationACK, ManagedConfigV1: managedConfig}}}); err != nil {
 		return err
 	}
+	if sender.ctx.Err() != nil {
+		return sender.stopError()
+	}
+	c.mu.Lock()
+	c.ready[e.AgentId] = &readyStream{sessionID: e.SessionId, sender: sender, managedConfig: managedConfig}
+	c.mu.Unlock()
 	c.log.Info("agent connected", "agent_id", e.AgentId, "session_id", e.SessionId, "name", h.Name, "application_ack", applicationACK)
 	defer c.log.Info("agent disconnected", "agent_id", e.AgentId)
 	sequence := e.Sequence
 	for {
-		next, err := stream.Recv()
+		next, err := sender.receive(received)
 		if err == io.EOF {
 			return nil
 		}
@@ -115,7 +147,10 @@ func (c *Controller) Connect(stream grpc.BidiStreamingServer[pb.AgentEnvelope, p
 		if next.GetHello() != nil || next.AgentId != e.AgentId || next.SessionId != e.SessionId || next.Sequence <= sequence {
 			return status.Error(codes.InvalidArgument, "invalid stream identity or sequence")
 		}
-		if err = c.persist(stream.Context(), next); err != nil {
+		if err = c.authorize(sender.ctx, next.AgentId); err != nil {
+			return err
+		}
+		if err = c.persist(sender.ctx, next); err != nil {
 			return err
 		}
 		sequence = next.Sequence
@@ -139,6 +174,12 @@ func (c *Controller) persist(ctx context.Context, e *pb.AgentEnvelope) error {
 		if errors.Is(err, storage.ErrMessageConflict) {
 			return status.Error(codes.InvalidArgument, "message ID reused with different contents")
 		}
+		if errors.Is(err, storage.ErrEventConflict) || errors.Is(err, storage.ErrInvalidAvailability) {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
+		if errors.Is(err, storage.ErrLogConflict) || errors.Is(err, storage.ErrInvalidLogs) || errors.Is(err, storage.ErrInvalidTelephony) {
+			return status.Error(codes.InvalidArgument, err.Error())
+		}
 		c.log.Error("cannot persist agent message", "agent_id", e.AgentId, "message_id", e.MessageId, "kind", storage.Kind(e), "ack_sent", false, "error", err)
 		return status.Error(codes.Unavailable, "cannot persist message; reconnect and retry")
 	}
@@ -153,6 +194,9 @@ func validate(e *pb.AgentEnvelope) error {
 		return errors.New("envelope ID exceeds 256 bytes")
 	}
 	if err := validateFields(e.ProtoReflect()); err != nil {
+		return err
+	}
+	if err := collectorcontract.Validate(e); err != nil {
 		return err
 	}
 	switch p := e.Payload.(type) {
@@ -172,6 +216,22 @@ func validate(e *pb.AgentEnvelope) error {
 			if d == nil || d.Id == "" {
 				return errors.New("inventory requires device IDs")
 			}
+		}
+	case *pb.AgentEnvelope_Topology:
+		if err := topology.Validate(p.Topology); err != nil {
+			return err
+		}
+	case *pb.AgentEnvelope_Logs:
+		if err := logbook.Validate(p.Logs); err != nil {
+			return err
+		}
+	case *pb.AgentEnvelope_Telephony:
+		if err := telephony.Validate(p.Telephony); err != nil {
+			return err
+		}
+	case *pb.AgentEnvelope_CommandResult:
+		if err := commands.ValidateResult(p.CommandResult); err != nil {
+			return err
 		}
 	case *pb.AgentEnvelope_Telemetry:
 		if p.Telemetry == nil || len(p.Telemetry.Samples) == 0 || len(p.Telemetry.Samples) > 1024 {

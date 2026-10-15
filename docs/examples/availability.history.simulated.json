@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "id": 7,
+      "agent_id": "d161e9b8-761a-4775-9ad2-cae0aadf5696",
+      "device_id": "simulated:device-001",
+      "kind": "inventory",
+      "source": "simulated",
+      "message_id": "ebef79b1-83f6-4b27-9bb4-96721cbdf532",
+      "event_id": "",
+      "time_basis": "agent_observed",
+      "from_online": false,
+      "to_online": true,
+      "observed_at": "2026-10-07T18:15:03Z",
+      "received_at": "2026-10-07T18:15:04.089282Z"
+    },
+    {
+      "id": 6,
+      "agent_id": "d161e9b8-761a-4775-9ad2-cae0aadf5696",
+      "device_id": "simulated:device-001",
+      "kind": "inventory",
+      "source": "simulated",
+      "message_id": "90325b61-e0f0-4515-aa35-665937d7f817",
+      "event_id": "",
+      "time_basis": "agent_observed",
+      "from_online": true,
+      "to_online": false,
+      "observed_at": "2026-10-07T18:15:00Z",
+      "received_at": "2026-10-07T18:15:01.088998Z"
+    },
+    {
+      "id": 2,
+      "agent_id": "d161e9b8-761a-4775-9ad2-cae0aadf5696",
+      "device_id": "simulated:device-001",
+      "kind": "inventory",
+      "source": "simulated",
+      "message_id": "88562952-d0ac-4fe6-950e-be2692c1bce6",
+      "event_id": "",
+      "time_basis": "agent_observed",
+      "from_online": null,
+      "to_online": true,
+      "observed_at": "2026-10-07T18:14:58Z",
+      "received_at": "2026-10-07T18:14:59.152807Z"
+    }
+  ],
+  "limit": 100,
+  "offset": 0
+}

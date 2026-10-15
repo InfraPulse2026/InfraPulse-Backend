@@ -1,0 +1,75 @@
+{
+  "expected_revision": 0,
+  "confirmed": true,
+  "reason": "Review all addresses and local allowlists before applying this documentation example",
+  "site": "demo-site",
+  "targets": [
+    {
+      "target_id": "switch-01",
+      "protocol": "snmp",
+      "enabled": true,
+      "endpoint": "192.0.2.11",
+      "credential_ref": "snmp-read",
+      "polling": {
+        "fast_interval": "3s"
+      },
+      "snmp": {
+        "version": "v2c",
+        "port": 161,
+        "retries": 0
+      }
+    },
+    {
+      "target_id": "router-01",
+      "protocol": "routeros",
+      "enabled": true,
+      "endpoint": "https://192.0.2.12",
+      "credential_ref": "router-read",
+      "polling": {
+        "fast_interval": "3s"
+      }
+    },
+    {
+      "target_id": "pbx-01",
+      "protocol": "sip",
+      "enabled": true,
+      "endpoint": "192.0.2.13",
+      "polling": {
+        "fast_interval": "3s"
+      },
+      "sip": {
+        "transport": "udp",
+        "port": 5060
+      }
+    },
+    {
+      "target_id": "bmc-redfish",
+      "protocol": "redfish",
+      "enabled": true,
+      "endpoint": "https://192.0.2.14",
+      "credential_ref": "bmc-read",
+      "polling": {
+        "medium_interval": "30s",
+        "inventory_interval": "300s"
+      },
+      "redfish": {
+        "auth": "session"
+      }
+    },
+    {
+      "target_id": "bmc-ipmi",
+      "protocol": "ipmi",
+      "enabled": true,
+      "endpoint": "192.0.2.15",
+      "credential_ref": "bmc-read",
+      "polling": {
+        "medium_interval": "30s",
+        "inventory_interval": "300s"
+      },
+      "ipmi": {
+        "cipher_suite": 17,
+        "privilege": "user"
+      }
+    }
+  ]
+}

@@ -44,43 +44,47 @@ func TestServerStartupReadinessAndShutdown(t *testing.T) {
 	t.Setenv("DATABASE_URL", u.String())
 	t.Setenv("HTTP_ADDRESS", httpAddress)
 	t.Setenv("GRPC_ADDRESS", grpcAddress)
-	for _, key := range []string{"TLS_CERT_FILE", "TLS_KEY_FILE", "TLS_CLIENT_CA_FILE", "AGENT_TIMEOUT", "DEFAULT_TELEMETRY_INTERVAL", "DEFAULT_INVENTORY_INTERVAL", "DEFAULT_TOPOLOGY_INTERVAL"} {
+	for _, key := range []string{"TLS_CERT_FILE", "TLS_KEY_FILE", "TLS_CLIENT_CA_FILE", "AGENT_TIMEOUT", "DEFAULT_TELEMETRY_INTERVAL", "DEFAULT_INVENTORY_INTERVAL", "DEFAULT_TOPOLOGY_INTERVAL", "AUTH_MODE", "AUTH_SESSION_TTL", "AUTH_PUBLIC_ORIGIN", "AUTH_COOKIE_SECURE"} {
 		t.Setenv(key, "")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	result := make(chan error, 1)
-	go func() { result <- run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil))) }()
-	client := &http.Client{Timeout: 200 * time.Millisecond}
-	ready := false
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		response, err := client.Get("http://" + httpAddress + "/readyz")
-		if err == nil {
-			_ = response.Body.Close()
-			if response.StatusCode == 200 {
-				ready = true
-				break
+	// Start a second runtime against the same schema and listener addresses.
+	// This checks repeatable migrations, worker shutdown and port release.
+	for generation := 1; generation <= 2; generation++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		result := make(chan error, 1)
+		go func() { result <- run(ctx, slog.New(slog.NewTextHandler(io.Discard, nil))) }()
+		client := &http.Client{Timeout: 200 * time.Millisecond}
+		ready := false
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			response, err := client.Get("http://" + httpAddress + "/readyz")
+			if err == nil {
+				_ = response.Body.Close()
+				if response.StatusCode == 200 {
+					ready = true
+					break
+				}
 			}
+			select {
+			case err := <-result:
+				t.Fatalf("server exited before readiness: %v", err)
+			default:
+			}
+			time.Sleep(20 * time.Millisecond)
 		}
+		if !ready {
+			t.Fatal("server never became ready")
+		}
+		cancel()
 		select {
 		case err := <-result:
-			t.Fatalf("server exited before readiness: %v", err)
-		default:
+			if err != nil {
+				t.Fatal(err)
+			}
+		case <-time.After(6 * time.Second):
+			t.Fatal("shutdown timed out")
 		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	if !ready {
-		t.Fatal("server never became ready")
-	}
-	cancel()
-	select {
-	case err := <-result:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(6 * time.Second):
-		t.Fatal("shutdown timed out")
 	}
 }
 

@@ -1,0 +1,84 @@
+{
+  "agent_id": "d161e9b8-761a-4775-9ad2-cae0aadf5696",
+  "device_id": "simulated:device-001",
+  "name": "Simulated device 1",
+  "hostname": "sim-device-001",
+  "vendor": "simulated",
+  "model": "development-simulator",
+  "type": "DEVICE_TYPE_SWITCH",
+  "management_address": "192.0.2.1",
+  "source": "simulated",
+  "online": true,
+  "reported_online": true,
+  "availability": {
+    "status": "online",
+    "reason": "device_reported_online",
+    "last_reported_online": true,
+    "agent_connected": true,
+    "evidence_kind": "telemetry",
+    "source": "simulated",
+    "message_id": "35a5ac5e-97b0-43f3-bbb3-97f90b3435b4",
+    "time_basis": "agent_observed",
+    "observed_at": "2026-10-07T18:15:04Z",
+    "received_at": "2026-10-07T18:15:05.12812Z",
+    "expires_at": "2026-10-07T18:15:15Z",
+    "age_seconds": 1,
+    "expected_interval_seconds": 3,
+    "stale_after_seconds": 11,
+    "clock_skew": false
+  },
+  "agent_connected": true,
+  "last_seen": "2026-10-07T18:15:04Z",
+  "received_at": "2026-10-07T18:15:05.12812Z",
+  "inventory": {
+    "id": "simulated:device-001",
+    "os": "simulated",
+    "name": "Simulated device 1",
+    "type": "DEVICE_TYPE_SWITCH",
+    "model": "development-simulator",
+    "driver": "simulated",
+    "online": true,
+    "source": "simulated",
+    "vendor": "simulated",
+    "hostname": "sim-device-001",
+    "location": {},
+    "last_seen": "2026-10-07T18:15:04Z",
+    "capabilities": [
+      {
+        "name": "inventory.read",
+        "supported": true
+      },
+      {
+        "name": "telemetry.read",
+        "supported": true
+      },
+      {
+        "name": "topology.lldp",
+        "supported": true
+      }
+    ],
+    "uptime_source": "simulated",
+    "uptime_seconds": 3606,
+    "management_address": "192.0.2.1"
+  },
+  "monitoring": {
+    "telemetry_interval_seconds": 3,
+    "inventory_interval_seconds": 300,
+    "topology_interval_seconds": 300,
+    "origin": "backend_default",
+    "delivery_mode": "manual_agent_yaml",
+    "application_status": "unverified",
+    "local_telemetry_yaml": "telemetry:\n  fast_interval: 3s\n  inventory_interval: 300s\n  topology_interval: 300s\n  heartbeat_interval: 10s\n",
+    "remote_polling_yaml": "polling:\n  fast_interval: 3s\n  inventory_interval: 300s\n  topology_interval: 300s\n",
+    "recommended_topology_ttl_seconds": 630
+  },
+  "telemetry_freshness": {
+    "status": "fresh",
+    "expected_interval_seconds": 3,
+    "stale_after_seconds": 11,
+    "age_seconds": 1,
+    "observed_at": "2026-10-07T18:15:04Z",
+    "received_at": "2026-10-07T18:15:05.12812Z",
+    "expected_next_at": "2026-10-07T18:15:07Z"
+  }
+}

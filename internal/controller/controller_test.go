@@ -52,11 +52,11 @@ func testHello() *pb.AgentEnvelope {
 func heartbeat() *pb.AgentEnvelope {
 	return &pb.AgentEnvelope{MessageId: "heartbeat-2", AgentId: "agent-1", SessionId: "session-1", Sequence: 2, SentAt: timestamppb.Now(), Payload: &pb.AgentEnvelope_Heartbeat{Heartbeat: &pb.Heartbeat{Timestamp: timestamppb.Now(), Health: "healthy"}}}
 }
-func testClient(t *testing.T, repo Repository) pb.AgentServiceClient {
+func testClient(t *testing.T, repo Repository, options ...Option) pb.AgentServiceClient {
 	t.Helper()
 	listener := bufconn.Listen(4 << 20)
 	server := grpc.NewServer()
-	pb.RegisterAgentServiceServer(server, New(repo, slog.New(slog.NewTextHandler(io.Discard, nil))))
+	pb.RegisterAgentServiceServer(server, New(repo, slog.New(slog.NewTextHandler(io.Discard, nil)), options...))
 	go func() { _ = server.Serve(listener) }()
 	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

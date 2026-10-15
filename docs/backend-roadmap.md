@@ -1,7 +1,26 @@
 # Backend InfraPulse: следующие этапы после сквозного MVP
+Локально реализованы topology (пункт 1 списка), availability expiry (пункт 8)
+и logs/audit (пункт 2), SIP/telephony (пункт 3), REST auth/roles (пункт 9), команды (пункт 4), snapshot/rollback (пункт5), PKI enrollment/renewal (пункт7).
+Подробности: [этап 1](topology-stage1.md), [этап 2](availability-stage2.md),
+[этап 3](logs-audit-stage3.md), [этап 4](telephony-stage4.md), [этап 5](access-stage5.md), [этап 6](commands-stage6.md).
+Эти изменения пока не опубликованы на GitHub. В объёме MVP реализованы 8 из
+10 пунктов: 1, 2, 3, 4, 5, 7, 8, 9. Результаты проверок записываются отдельно в
+[validation.md](validation.md). Остаются
+live config (6) и incidents/reports/AI (10). Детали PKI — [этап8](stage8-pki.md).
 
-Этот документ описывает предложенную реализацию следующих этапов, а не уже
-готовые функции. Исходный Agent не меняется. Frontend разрабатывает другая
+Начат пункт10: CPU/RAM/trend, evidence и lifecycle incidents реализованы
+в [этапе9A](stage9a-health-incidents.md), interface/SIP rules —
+в [этапе9B](stage9b-network-sip-incidents.md), flap/collector-loss —
+в [этапе9C](stage9c-flap-collector-incidents.md), reports —
+в [этапе9D](stage9d-reports.md), contextual diagnosis —
+в [этапе9E](stage9e-diagnostic-context.md), AI workflow —
+в [этапе9F](stage9f-ai-analysis.md). Реальный provider acceptance и регулярный
+report scheduler ещё остаются. До acceptance подтверждённых пунктов8из10.
+
+
+
+Ниже описаны целевые расширения; конкретный реализованный объём каждого модуля
+зафиксирован в документах этапов выше. Исходный Agent не меняется. Frontend разрабатывает другая
 команда; здесь определяются данные, расчёты и API, которые backend даст ей.
 
 ## Что уточнили организаторы
@@ -200,18 +219,21 @@ restart или отключение management-порта.
 
 До исполнения нужны пользовательская авторизация, операторское подтверждение,
 policy check, защита management interfaces, stale-state check, audit trail,
-idempotency key и timeout. HTTP API MVP пока не имеет user auth, поэтому
-мутации не подключаются к открытому локальному API без этого следующего слоя.
+idempotency key и timeout. REST auth/roles и журнал действий доступа добавлены
+в этапе 5. Этап 6 реализует подтверждённые interface enable/disable для поддерживаемого
+RouterOS через Agent; остальные действия и AI proposals остаются дальнейшим планом.
 
-Планируемые сущности: `action_proposals`, `commands`, `command_results`,
-`audit_entries`. API: создать предложение → одобрить → проверить policy →
+Сущности controller_commands/command_results и журнал переходов уже добавлены;
+action_proposals и полный AI approval workflow остаются планом. Целевая цепочка:
+создать предложение → одобрить → проверить policy →
 отправить существующий protobuf Command → принять CommandResult → прочитать
 новую telemetry и verification.
 
 `Send` не означает успех. `uncertain=true`, timeout и потеря stream сохраняются
 как неопределённый/неподтверждённый результат. Повторное нажатие не создаёт вторую
-мутацию. Универсальный rollback не обещается: у текущего Agent нет config
-snapshots/rollback. Обратная interface-команда тоже требует отдельной проверки.
+мутацию. Agent P3 уже имеет snapshot_id и typed RollbackAction. Backend пока
+реализует выдачу typed rollback и отслеживание snapshot references в этапе7.
+Универсальный rollback не обещается; обратная interface-команда тоже требует проверки.
 
 Simulator сейчас отвечает на команды unsupported. Нельзя показывать его
 самостоятельное recovery как результат исполненной AI-команды. Для проверки
@@ -237,14 +259,16 @@ Simulator сейчас отвечает на команды unsupported. Нел�
 | 1 | topology + logs/events/telephony projections и read API | получить контекст, на который опирается диагностика |
 | 2 | health rules + incidents + recovery | доказать раннее предупреждение и объяснимость |
 | 3 | ограниченный AI context, preview и analysis | ИИ получает структурированные факты |
-| 4 | auth/audit + один guarded action | исполнение только на поддерживаемом стенде |
+| 4 | один guarded action поверх auth/audit этапа 5 | исполнение только на поддерживаемом стенде |
 | 5 | сводный отчёт и фиксация demo acceptance | закрыть требования и сделать результат повторяемым |
 
-Первый следующий модуль — топология из уже полученных Agent observations.
-Для его реализации нужны следующая версионированная миграция, ingest projections, query layer, API,
-OpenAPI и tests complete/partial/failed/expiry/dedup/unresolved. Миграцию 001
-уже проверенного MVP не переписываем. Не добавляем Kafka, микросервисы и
-несколько СУБД без фактической необходимости.
+Следующий независимый модуль — health rules/incidents/reports/AI. PKI/enrollment, snapshot/rollback,
+commands/auth, SIP и локальные пользователи добавлены
+в текущую копию; UI разрабатывается отдельно.
+Live ConfigUpdate требует согласованного расширения контракта с владельцем Agent:
+в текущем agent.proto соответствующее controller message отсутствует.
+Миграции 001..003 опубликованной базы не переписываем. Новые таблицы этапов
+идут в 004..011. Не добавляем Kafka, микросервисы и несколько СУБД без необходимости.
 
 Обязательное ядро защиты: работающая цепочка Agent → база → API, наблюдаемая
 карта, объяснимый health/incident, logs и SIP context. Главная демонстрационная
@@ -252,3 +276,58 @@ OpenAPI и tests complete/partial/failed/expiry/dedup/unresolved. Миграци
 Управление по кнопке — следующий слой при готовом безопасном стенде.
 Победа не гарантируется; качество оцениваем по воспроизводимой демонстрации,
 покрытию кейса и честным границам возможностей.
+
+
+## Backend v2 B9 — managed Collector configuration
+
+Реализованы admin REST desired/applied, полные snapshots и canonical digest финального Collector, monotonic revisions, durable stream delivery/status history, runtime proof и наследование применённого polling в freshness. Включение требует explicit backend flag, mTLS и local Collector opt-in. Подробно: [B9](backend-v2-b9-collector-configuration.md). Следующие стадии окончательного плана — B10–B16; фронтенд и code Agent вне текущей работы.
+
+## Backend v2 B10 — Ansible read-only automation
+
+Добавлены отдельный Linux Worker, реестр фиксированных read-only шаблонов Cisco IOS/Arista EOS/VyOS, admin Asset/SSH bindings, durable jobs/claims/cancel/expiry/audit, безопасные события и encrypted configuration/facts snapshots. Backend-реализация проверяется локально, настоящая Ansible/device приёмка требует Linux-стенда. Подробно: [B10](backend-v2-b10-ansible.md), [валидация](backend-v2-b10-validation.md). Далее — B11 drift, B12 multisource incidents, B13 AI, B14 chronic/reports, B15 TSDB/Grafana, B16 итоговая безопасность/HA/acceptance. Исторические описания старых контрактов выше не заменяют актуальные B9/B10.
+
+## Backend v2 B11.1 — expected/actual и drift
+
+Добавлены immutable admin-approved snapshot baseline, versioned conservative normalizer, automatic redacted diff, history/freshness/source guards и related reviewed VoIP context. [Инструкция](backend-v2-b11-1-configuration-drift.md), [валидация](backend-v2-b11-1-validation.md).
+
+## Backend v2 B11.2 — безопасное remediation
+
+Добавлены versioned per-Asset policy, разрешённые VLAN, protected interfaces, idempotent request, отдельное live-admin approval, повторные preflight-проверки во время исполнения, один закрытый action `restore_access_vlan` для Cisco IOS/Arista EOS и автоматическая recollection/verification. Произвольные команды и playbooks не принимаются. [Инструкция](backend-v2-b11-2-remediation.md), [валидация](backend-v2-b11-2-validation.md). B11 завершён на уровне backend; реальная Linux/SSH/device приёмка остаётся обязательной перед демонстрацией. Далее B12–B16.
+
+## Backend v2 B12.1 — durable multi-source incident foundation
+
+Добавлены migration 035, durable projection queue, normalized signals поверх прежних incidents, Asset/service/site/topology scoring, timeline, повторная обработка и explicit all-signals recovery. [Описание](backend-v2-b12-1-correlation.md). B12 целиком ещё открыт: Prometheus alerts, log/hardware/drift/topology producers и полная multi-source приёмка — следующие шаги.
+
+## Backend v2 B12.2a — Prometheus firing alerts
+
+Добавлены opt-in alerts_enabled, bounded /api/v1/alerts, однозначный selected-target mapping, устойчивые events/incident IDs и передача в B12.1 queue. Отсутствие alert не считается recovery. [Инструкция](backend-v2-b12-2a-prometheus-alerts.md). Explicit resolved delivery, hardware/log/drift/topology producers и полная B12 приёмка остаются.
+
+Добавлен [B12.2b — explicit resolved delivery Alertmanager](backend-v2-b12-2b-alertmanager.md). Историческое ограничение отсутствия resolved выше относится к первоначальному B12.2a.
+
+## Backend v2 B12.3a — hardware vendor health
+
+Migration 038, durable sample queue, explicit Warning/Critical, stable three-sample OK recovery, typed hardware evidence и correlation producer. Agent не изменён. [Описание](backend-v2-b12-3a-hardware-incidents.md). Следом — log/drift/topology producers; B12 целиком пока открыт.
+
+## Backend v2 B12.3b — reported log event producer
+
+Migration 039, durable queue, source-owned five-minute grouping по явной severity, source-record evidence, correlation и защищённый operator review без утверждения device recovery. Agent не изменён. [Описание](backend-v2-b12-3b-log-incidents.md). B12 целиком открыт: audit/pattern rules без severity, drift/topology producers и общая приёмка.
+
+## Backend v2 B12.3c — explicit audit failure
+
+Добавлено audit.reported_failure по явному success=false, nullable исходный severity, общая durable очередь и защищённый review. [Описание](backend-v2-b12-3c-audit-incidents.md). Agent не изменён. Pattern rules, drift/topology и общая приёмка B12 остаются.
+
+## Backend v2 B12.4 — configuration drift producer
+
+Добавлены Asset-only configuration incidents по последнему свежему B11 сравнению, durable queue/cursor, explicit same-baseline compliance recovery, correlation и API/OpenAPI 0.40.0. [Описание](backend-v2-b12-4-configuration-incidents.md). Исторические comparisons/unknown/смена baseline не закрывают drift. Agent не изменён. Topology, оставшиеся pattern rules и общая B12 приёмка впереди.
+
+## Backend v2 B12.5a — reported neighboring endpoint changes
+
+Добавлены durable topology snapshot queue/baseline, conservative COMPLETE LLDP/CDP peer change rule, immutable before/after references, guarded operator review и correlation. [Описание](backend-v2-b12-5a-topology-incidents.md). TTL expiry/absence/partial не означают отказ. Agent не изменён. Общая B12 приёмка и оставшиеся pattern/дополнительные topology rules впереди.
+
+## Backend v2 B12 — завершён локальный функциональный объём
+
+[Заключение и границы B12](backend-v2-b12-final.md): полный набор MVP producers, pattern catalog, normalized signals, evidence/timeline, structural correlation и all-members recovery проверены локально. Живая командная приёмка остаётся B16. Исторические пометки «B12 открыт» выше относятся к промежуточным стадиям. Следующий этап B13 — multi-source AI context.
+
+## Backend v2 B13 — multi-source AI workflow
+
+[Контекст и API B13](backend-v2-b13-ai.md): case export, pseudonymization, local ref mapping, case confirmation/history, bounded rate-limit retry и uncertainty готовы локально. Реальный вызов модели команды ещё нужен для acceptance. Старый workflow сохранён. Следующий этап B14 — asset/site chronic reports и scheduler.
